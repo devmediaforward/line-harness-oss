@@ -1,0 +1,390 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`buildResultFlex > 4軸: bubble スナップショット 1`] = `
+{
+  "altText": "清潔感診断の結果: 46点・清潔感 一人前(Standard)",
+  "contents": {
+    "body": {
+      "contents": [
+        {
+          "align": "center",
+          "color": "#2563EB",
+          "size": "5xl",
+          "text": "B",
+          "type": "text",
+          "weight": "bold",
+        },
+        {
+          "align": "center",
+          "color": "#333333",
+          "size": "md",
+          "text": "清潔感 一人前(Standard)",
+          "type": "text",
+          "weight": "bold",
+          "wrap": true,
+        },
+        {
+          "align": "center",
+          "color": "#888888",
+          "size": "sm",
+          "text": "スコア 46点",
+          "type": "text",
+        },
+        {
+          "margin": "lg",
+          "type": "separator",
+        },
+        {
+          "contents": [
+            {
+              "contents": [
+                {
+                  "color": "#555555",
+                  "flex": 4,
+                  "size": "sm",
+                  "text": "体毛",
+                  "type": "text",
+                  "wrap": true,
+                },
+                {
+                  "align": "end",
+                  "color": "#DC2626",
+                  "flex": 1,
+                  "size": "lg",
+                  "text": "△",
+                  "type": "text",
+                  "weight": "bold",
+                },
+              ],
+              "layout": "horizontal",
+              "type": "box",
+            },
+            {
+              "contents": [
+                {
+                  "color": "#555555",
+                  "flex": 4,
+                  "size": "sm",
+                  "text": "肌",
+                  "type": "text",
+                  "wrap": true,
+                },
+                {
+                  "align": "end",
+                  "color": "#D97706",
+                  "flex": 1,
+                  "size": "lg",
+                  "text": "○",
+                  "type": "text",
+                  "weight": "bold",
+                },
+              ],
+              "layout": "horizontal",
+              "type": "box",
+            },
+            {
+              "contents": [
+                {
+                  "color": "#555555",
+                  "flex": 4,
+                  "size": "sm",
+                  "text": "眉",
+                  "type": "text",
+                  "wrap": true,
+                },
+                {
+                  "align": "end",
+                  "color": "#16A34A",
+                  "flex": 1,
+                  "size": "lg",
+                  "text": "◎",
+                  "type": "text",
+                  "weight": "bold",
+                },
+              ],
+              "layout": "horizontal",
+              "type": "box",
+            },
+            {
+              "contents": [
+                {
+                  "color": "#555555",
+                  "flex": 4,
+                  "size": "sm",
+                  "text": "髪",
+                  "type": "text",
+                  "wrap": true,
+                },
+                {
+                  "align": "end",
+                  "color": "#DC2626",
+                  "flex": 1,
+                  "size": "lg",
+                  "text": "△",
+                  "type": "text",
+                  "weight": "bold",
+                },
+              ],
+              "layout": "horizontal",
+              "type": "box",
+            },
+          ],
+          "layout": "vertical",
+          "margin": "lg",
+          "spacing": "sm",
+          "type": "box",
+        },
+      ],
+      "layout": "vertical",
+      "spacing": "md",
+      "type": "box",
+    },
+    "footer": {
+      "contents": [
+        {
+          "action": {
+            "label": "結果をくわしく見る",
+            "type": "uri",
+            "uri": "https://liff.line.me/123-abc/diagnosis/result/sub-1",
+          },
+          "color": "#06C755",
+          "style": "primary",
+          "type": "button",
+        },
+        {
+          "action": {
+            "label": "友だちにシェアする",
+            "type": "uri",
+            "uri": "https://worker.example.com/d/token-1",
+          },
+          "style": "secondary",
+          "type": "button",
+        },
+      ],
+      "layout": "vertical",
+      "spacing": "sm",
+      "type": "box",
+    },
+    "header": {
+      "contents": [
+        {
+          "color": "#888888",
+          "size": "sm",
+          "text": "清潔感診断 結果",
+          "type": "text",
+        },
+      ],
+      "layout": "vertical",
+      "type": "box",
+    },
+    "type": "bubble",
+  },
+  "type": "flex",
+}
+`;
+
+exports[`buildResultFlex > 5軸: 行が増えるだけで壊れない 1`] = `
+{
+  "altText": "清潔感診断の結果: 46点・清潔感 一人前(Standard)",
+  "contents": {
+    "body": {
+      "contents": [
+        {
+          "align": "center",
+          "color": "#2563EB",
+          "size": "5xl",
+          "text": "B",
+          "type": "text",
+          "weight": "bold",
+        },
+        {
+          "align": "center",
+          "color": "#333333",
+          "size": "md",
+          "text": "清潔感 一人前(Standard)",
+          "type": "text",
+          "weight": "bold",
+          "wrap": true,
+        },
+        {
+          "align": "center",
+          "color": "#888888",
+          "size": "sm",
+          "text": "スコア 46点",
+          "type": "text",
+        },
+        {
+          "margin": "lg",
+          "type": "separator",
+        },
+        {
+          "contents": [
+            {
+              "contents": [
+                {
+                  "color": "#555555",
+                  "flex": 4,
+                  "size": "sm",
+                  "text": "体毛",
+                  "type": "text",
+                  "wrap": true,
+                },
+                {
+                  "align": "end",
+                  "color": "#DC2626",
+                  "flex": 1,
+                  "size": "lg",
+                  "text": "△",
+                  "type": "text",
+                  "weight": "bold",
+                },
+              ],
+              "layout": "horizontal",
+              "type": "box",
+            },
+            {
+              "contents": [
+                {
+                  "color": "#555555",
+                  "flex": 4,
+                  "size": "sm",
+                  "text": "肌",
+                  "type": "text",
+                  "wrap": true,
+                },
+                {
+                  "align": "end",
+                  "color": "#D97706",
+                  "flex": 1,
+                  "size": "lg",
+                  "text": "○",
+                  "type": "text",
+                  "weight": "bold",
+                },
+              ],
+              "layout": "horizontal",
+              "type": "box",
+            },
+            {
+              "contents": [
+                {
+                  "color": "#555555",
+                  "flex": 4,
+                  "size": "sm",
+                  "text": "眉",
+                  "type": "text",
+                  "wrap": true,
+                },
+                {
+                  "align": "end",
+                  "color": "#16A34A",
+                  "flex": 1,
+                  "size": "lg",
+                  "text": "◎",
+                  "type": "text",
+                  "weight": "bold",
+                },
+              ],
+              "layout": "horizontal",
+              "type": "box",
+            },
+            {
+              "contents": [
+                {
+                  "color": "#555555",
+                  "flex": 4,
+                  "size": "sm",
+                  "text": "髪",
+                  "type": "text",
+                  "wrap": true,
+                },
+                {
+                  "align": "end",
+                  "color": "#DC2626",
+                  "flex": 1,
+                  "size": "lg",
+                  "text": "△",
+                  "type": "text",
+                  "weight": "bold",
+                },
+              ],
+              "layout": "horizontal",
+              "type": "box",
+            },
+            {
+              "contents": [
+                {
+                  "color": "#555555",
+                  "flex": 4,
+                  "size": "sm",
+                  "text": "歯",
+                  "type": "text",
+                  "wrap": true,
+                },
+                {
+                  "align": "end",
+                  "color": "#D97706",
+                  "flex": 1,
+                  "size": "lg",
+                  "text": "○",
+                  "type": "text",
+                  "weight": "bold",
+                },
+              ],
+              "layout": "horizontal",
+              "type": "box",
+            },
+          ],
+          "layout": "vertical",
+          "margin": "lg",
+          "spacing": "sm",
+          "type": "box",
+        },
+      ],
+      "layout": "vertical",
+      "spacing": "md",
+      "type": "box",
+    },
+    "footer": {
+      "contents": [
+        {
+          "action": {
+            "label": "結果をくわしく見る",
+            "type": "uri",
+            "uri": "https://liff.line.me/123-abc/diagnosis/result/sub-2",
+          },
+          "color": "#06C755",
+          "style": "primary",
+          "type": "button",
+        },
+        {
+          "action": {
+            "label": "友だちにシェアする",
+            "type": "uri",
+            "uri": "https://worker.example.com/d/token-2",
+          },
+          "style": "secondary",
+          "type": "button",
+        },
+      ],
+      "layout": "vertical",
+      "spacing": "sm",
+      "type": "box",
+    },
+    "header": {
+      "contents": [
+        {
+          "color": "#888888",
+          "size": "sm",
+          "text": "清潔感診断 結果",
+          "type": "text",
+        },
+      ],
+      "layout": "vertical",
+      "type": "box",
+    },
+    "type": "bubble",
+  },
+  "type": "flex",
+}
+`;
