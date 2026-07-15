@@ -18,6 +18,7 @@ import {
   getDiagnosisSubmissions,
   countDiagnosisSubmissions,
   getDiagnosisSubmissionById,
+  getDiagnosisSubmissionByShareToken,
   createDiagnosisSubmission,
   getFriendByLineUserId,
   getLineAccountById,
@@ -130,6 +131,173 @@ function buildLiffResultUrl(shareLiffUrl: string, submissionId: string): string 
   const m = shareLiffUrl.match(/liff\.line\.me\/([^/?#]+)/);
   const liffId = m ? m[1] : '';
   return `https://liff.line.me/${liffId}/diagnosis/result/${submissionId}`;
+}
+
+// ── 公開シェアページ (07_share-og.md / 決定 D4・D7) ─────────────────────────────
+// 表示は result スナップショットのみで行う(definition 非依存)。CTA 遷移先・有効
+// 判定・OG 画像 URL/タイトルテンプレートだけを definition.share から読む(07 の
+// 「definition 非依存」は表示内容の原則であり、CTA/OG メタは share 設定からしか
+// 取得できないため)。D7: 公開ページに出すのは rank / rankTitle / totalScore /
+// 軸の◎○△ のみ。悩みタグ・カード・価格・axisMessages・cleanPoints・answers は
+// 一切出さない(result JSON の丸ごと埋め込みも禁止 — 必要フィールドだけを展開)。
+
+/** HTML エスケープ(属性・テキスト文脈両対応)。全動的値に適用する。 */
+function escapeShareHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function truncateShare(s: string, max: number): string {
+  return s.length > max ? s.slice(0, max) : s;
+}
+
+/** ランク別アクセント配色(D→S)。LIFF 結果ページ(DiagnosisResultView)と同トーン。 */
+const SHARE_RANK_THEME: Record<string, { gradient: string; accent: string }> = {
+  D: { gradient: 'linear-gradient(135deg,#9ca3af 0%,#6b7280 100%)', accent: '#6b7280' },
+  C: { gradient: 'linear-gradient(135deg,#d08a52 0%,#9a5a2c 100%)', accent: '#a15c2f' },
+  B: { gradient: 'linear-gradient(135deg,#3b82f6 0%,#1d4ed8 100%)', accent: '#2563eb' },
+  A: { gradient: 'linear-gradient(135deg,#a78bfa 0%,#6d28d9 100%)', accent: '#7c3aed' },
+  S: { gradient: 'linear-gradient(135deg,#f59e0b 0%,#d97706 100%)', accent: '#c2760a' },
+};
+const SHARE_DEFAULT_THEME = SHARE_RANK_THEME.D;
+
+/** grade → 記号・ラベル・色(DiagnosisResultView / flex と同じ固定ビジュアル)。 */
+const SHARE_GRADE_DISPLAY: Record<string, { symbol: string; label: string; color: string }> = {
+  keep: { symbol: '◎', label: 'キープ', color: '#16a34a' },
+  almost: { symbol: '○', label: 'あと少し', color: '#ca8a04' },
+  warn: { symbol: '△', label: '要注意', color: '#dc2626' },
+};
+
+/** ogTitleTemplate の {score}/{rankTitle} を展開。置換は関数レプレーサで $ の特殊解釈を回避。 */
+function expandShareTitle(template: string, score: number, rankTitle: string): string {
+  return template
+    .replace(/\{score\}/g, () => String(score))
+    .replace(/\{rankTitle\}/g, () => rankTitle);
+}
+
+/** 公開ページに渡す最小ビュー(D7 で許可された値のみ)。result JSON は渡さない。 */
+interface SharePageView {
+  rank: string;
+  rankTitle: string;
+  totalScore: number;
+  axes: Array<{ label: string; grade: string; score: number | null }>;
+  diagnosisName: string | null;
+  minorNotice: string | null;
+  ogTitle: string; // 展開済み(未エスケープ)
+  ogDescription: string | null;
+  ogImage: string | null; // 空文字/未設定は null(og:image を出さない)
+  ctaUrl: string | null; // null なら「自分も診断する」ボタン非表示
+  pageUrl: string;
+}
+
+/** 公開シェアページの完全な HTML を組み立てる(スマホ縦画面前提・インライン CSS)。 */
+function buildSharePageHtml(v: SharePageView): string {
+  const theme = SHARE_RANK_THEME[v.rank] ?? SHARE_DEFAULT_THEME;
+  const title = escapeShareHtml(truncateShare(v.ogTitle, 80));
+  const rank = escapeShareHtml(v.rank);
+  const rankTitle = escapeShareHtml(v.rankTitle);
+  const url = escapeShareHtml(v.pageUrl);
+
+  const ogDesc = v.ogDescription?.trim()
+    ? escapeShareHtml(truncateShare(v.ogDescription.trim(), 200))
+    : null;
+  const ogImg = v.ogImage?.trim() ? escapeShareHtml(v.ogImage.trim()) : null;
+
+  const metaLines: string[] = [
+    `<meta property="og:title" content="${title}">`,
+    `<meta property="og:type" content="website">`,
+    `<meta property="og:url" content="${url}">`,
+  ];
+  if (ogDesc) {
+    metaLines.push(`<meta property="og:description" content="${ogDesc}">`);
+    metaLines.push(`<meta name="description" content="${ogDesc}">`);
+  }
+  if (ogImg) metaLines.push(`<meta property="og:image" content="${ogImg}">`);
+  metaLines.push(`<meta name="twitter:card" content="summary_large_image">`);
+
+  const axisRows = v.axes
+    .map((a) => {
+      const g = SHARE_GRADE_DISPLAY[a.grade] ?? { symbol: '', label: '', color: '#6b7280' };
+      const scoreCell =
+        a.score !== null
+          ? `<span class="ax-score">${escapeShareHtml(a.score.toFixed(1))}</span>`
+          : '';
+      return `<li class="ax-row"><span class="ax-label">${escapeShareHtml(a.label)}</span><span class="ax-right"><span class="ax-grade" style="color:${g.color}">${g.symbol} ${escapeShareHtml(g.label)}</span>${scoreCell}</span></li>`;
+    })
+    .join('');
+
+  const ctaBlock = v.ctaUrl
+    ? `<a class="cta" href="${escapeShareHtml(v.ctaUrl)}">自分も診断する</a>`
+    : '';
+
+  const footName = v.diagnosisName
+    ? `<p class="foot-name">${escapeShareHtml(v.diagnosisName)}</p>`
+    : '';
+  const footNote = v.minorNotice
+    ? `<p class="foot-note">${escapeShareHtml(v.minorNotice)}</p>`
+    : '';
+  const footBlock = footName || footNote ? `<footer class="foot">${footName}${footNote}</footer>` : '';
+
+  return `<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${title}</title>
+${metaLines.join('\n')}
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Hiragino Sans','Helvetica Neue',system-ui,sans-serif;background:#f5f7f5;color:#1f2937;min-height:100vh;padding:20px 16px}
+.wrap{max-width:420px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+.hero{border-radius:20px;padding:32px 24px;text-align:center;color:#fff;box-shadow:0 2px 20px rgba(0,0,0,0.08)}
+.rank{font-size:72px;font-weight:900;line-height:1;text-shadow:0 2px 8px rgba(0,0,0,0.18)}
+.rank-title{margin-top:12px;font-size:18px;font-weight:700}
+.score{margin-top:14px;display:inline-block;border-radius:999px;background:rgba(255,255,255,0.22);padding:6px 18px;font-size:14px;font-weight:600}
+.axes{background:#fff;border-radius:16px;border:1px solid rgba(0,0,0,0.05);overflow:hidden}
+.ax-list{list-style:none}
+.ax-row{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #f1f3f4}
+.ax-row:last-child{border-bottom:none}
+.ax-label{font-size:14px;font-weight:500;color:#374151}
+.ax-right{display:flex;align-items:center;gap:10px}
+.ax-grade{font-size:14px;font-weight:700}
+.ax-score{min-width:34px;text-align:right;font-size:14px;color:#6b7280;font-variant-numeric:tabular-nums}
+.cta{display:block;width:100%;padding:16px;border-radius:12px;background:#06C755;color:#fff;font-size:16px;font-weight:700;text-align:center;text-decoration:none;box-shadow:0 2px 12px rgba(6,199,85,0.2)}
+.foot{text-align:center;color:#9ca3af}
+.foot-name{font-size:12px;font-weight:500}
+.foot-note{margin-top:6px;font-size:11px;line-height:1.6}
+</style>
+</head>
+<body>
+<main class="wrap">
+<section class="hero" style="background:${theme.gradient}">
+<div class="rank">${rank}</div>
+<div class="rank-title">${rankTitle}</div>
+<div class="score">スコア ${v.totalScore}点</div>
+</section>
+<section class="axes"><ul class="ax-list">${axisRows}</ul></section>
+${ctaBlock}
+${footBlock}
+</main>
+</body>
+</html>`;
+}
+
+/** 404・エラー時の簡素な HTML(内部情報を一切出さない)。 */
+function buildShareNotFoundHtml(): string {
+  return `<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ページが見つかりません</title>
+<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Hiragino Sans','Helvetica Neue',system-ui,sans-serif;background:#f5f7f5;color:#6b7280;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}p{font-size:15px;text-align:center}</style>
+</head>
+<body><p>お探しのページは見つかりませんでした</p></body>
+</html>`;
 }
 
 // ── 統計集計(result スナップショット走査) ────────────────────────────────
@@ -565,6 +733,76 @@ diagnoses.post('/api/liff/diagnoses/:slug/submissions', async (c) => {
     return c.json({ submissionId: submission.id, result, shareUrl });
   } catch {
     return c.json({ error: 'internal_error' }, 500);
+  }
+});
+
+// ── 公開シェアページ(認証なし。/api/ 以外なので authMiddleware は skip される) ──
+
+// GET /d/:shareToken — Worker が完結した HTML を返す(07_share-og.md)。
+// 表示は result スナップショットのみ。CTA/OG メタだけ definition.share から読む。
+// キャッシュ: 結果は不変なので public, max-age=300。
+diagnoses.get('/d/:shareToken', async (c) => {
+  try {
+    const shareToken = c.req.param('shareToken');
+    const submission = await getDiagnosisSubmissionByShareToken(c.env.DB, shareToken);
+    if (!submission) return c.html(buildShareNotFoundHtml(), 404);
+
+    const result = safeParse<DiagnosisResult | null>(submission.result, null);
+    if (!result || typeof result.rank !== 'string') {
+      return c.html(buildShareNotFoundHtml(), 404);
+    }
+
+    // CTA 遷移先・有効判定・OG 画像/タイトルテンプレートだけ definition から読む
+    // (表示内容は snapshot のみ)。診断が削除済み等で引けなくても表示は継続する。
+    const diagnosis = await getDiagnosisById(c.env.DB, submission.diagnosis_id);
+    const definition = diagnosis
+      ? safeParse<DiagnosisDefinition | null>(diagnosis.definition, null)
+      : null;
+    const share = definition?.share ?? null;
+
+    // share.enabled === false は共有機能無効の意思表示 → 404(07 に明記なし・委譲解釈)。
+    if (share && share.enabled === false) {
+      return c.html(buildShareNotFoundHtml(), 404);
+    }
+
+    // is_active=0 は表示継続・CTA だけ非表示(07)。CTA 遷移先は share.liffUrl。
+    const ctaUrl =
+      diagnosis && diagnosis.is_active && share?.liffUrl?.trim() ? share.liffUrl.trim() : null;
+
+    // OG 画像は該当ランクの URL。空文字/未設定なら og:image を出さない。
+    const rawOgImage = share?.ogImages?.[result.rank];
+    const ogImage =
+      typeof rawOgImage === 'string' && rawOgImage.trim() ? rawOgImage.trim() : null;
+
+    const safeScore = typeof result.totalScore === 'number' ? result.totalScore : 0;
+    const safeRankTitle = typeof result.rankTitle === 'string' ? result.rankTitle : '';
+    const ogTitleTemplate = share?.ogTitleTemplate?.trim();
+    const ogTitle = ogTitleTemplate
+      ? expandShareTitle(ogTitleTemplate, safeScore, safeRankTitle)
+      : `${safeRankTitle}・スコア${safeScore}点`;
+
+    const view: SharePageView = {
+      rank: result.rank,
+      rankTitle: safeRankTitle,
+      totalScore: safeScore,
+      axes: (result.axisScores ?? []).map((a) => ({
+        label: typeof a?.label === 'string' ? a.label : '',
+        grade: typeof a?.grade === 'string' ? a.grade : '',
+        score: typeof a?.score === 'number' ? a.score : null,
+      })),
+      diagnosisName: typeof result.diagnosisName === 'string' ? result.diagnosisName : null,
+      minorNotice: typeof result.minorNotice === 'string' ? result.minorNotice : null,
+      ogTitle,
+      ogDescription: share?.ogDescription?.trim() ? share.ogDescription : null,
+      ogImage,
+      ctaUrl,
+      pageUrl: `${resolveShareBaseUrl(c)}/d/${shareToken}`,
+    };
+
+    return c.html(buildSharePageHtml(view), 200, { 'Cache-Control': 'public, max-age=300' });
+  } catch {
+    // 公開エンドポイント: 内部情報(スタックトレース等)を出さず簡素な HTML を返す。
+    return c.html(buildShareNotFoundHtml(), 500);
   }
 });
 

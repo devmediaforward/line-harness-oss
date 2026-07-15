@@ -14,6 +14,7 @@ const dbMocks = {
   getDiagnosisSubmissions: vi.fn(),
   countDiagnosisSubmissions: vi.fn(),
   getDiagnosisSubmissionById: vi.fn(),
+  getDiagnosisSubmissionByShareToken: vi.fn(),
   createDiagnosisSubmission: vi.fn(),
   getFriendByLineUserId: vi.fn(),
   getLineAccountById: vi.fn(),
@@ -33,6 +34,7 @@ vi.mock('@line-crm/line-sdk', () => ({
 }));
 
 const { diagnoses } = await import('./diagnoses.js');
+const { runDiagnosis } = await import('../services/diagnosis/engine.js');
 
 const redentDef = redentJson as unknown as DiagnosisDefinition;
 
@@ -158,6 +160,7 @@ beforeEach(() => {
   dbMocks.getDiagnosisSubmissions.mockResolvedValue([]);
   dbMocks.countDiagnosisSubmissions.mockResolvedValue(0);
   dbMocks.getDiagnosisSubmissionById.mockResolvedValue(null);
+  dbMocks.getDiagnosisSubmissionByShareToken.mockResolvedValue(null);
   dbMocks.createDiagnosisSubmission.mockResolvedValue({
     id: 'sub-1',
     diagnosis_id: 'diag-1',
@@ -657,5 +660,204 @@ describe('GET /api/liff/diagnoses/submissions/:sid', () => {
     dbMocks.getDiagnosisSubmissionById.mockResolvedValue(null);
     const res = await req('GET', '/api/liff/diagnoses/submissions/missing', { auth: 'idtoken' });
     expect(res.status).toBe(404);
+  });
+});
+
+// ── 公開シェアページ GET /d/:shareToken (07_share-og.md / D4・D7) ───────────────
+
+describe('GET /d/:shareToken', () => {
+  /** share_token で引く submission 行(result はスナップショット JSON)。 */
+  function makeShareSubmission(result: unknown, overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'sub-share',
+      diagnosis_id: 'diag-1',
+      friend_id: 'friend-1',
+      line_user_id: 'U_alice',
+      definition_version: 3,
+      answers: '{}',
+      result: typeof result === 'string' ? result : JSON.stringify(result),
+      share_token: 'tok-share',
+      created_at: '2026-07-16T00:00:00+09:00',
+      ...overrides,
+    };
+  }
+
+  /** share 設定を一部差し替えた diagnosis 行。 */
+  function diagRowWithShare(
+    shareOverrides: Record<string, unknown>,
+    rowOverrides: Record<string, unknown> = {},
+  ) {
+    const def = { ...redentDef, share: { ...redentDef.share, ...shareOverrides } };
+    return makeDiagRow({ definition: JSON.stringify(def), ...rowOverrides });
+  }
+
+  const GRADE_SYMBOL: Record<string, string> = { keep: '◎', almost: '○', warn: '△' };
+
+  test('正常系: rank/rankTitle/totalScore/軸ラベル・グレードを含む 200', async () => {
+    const result = runDiagnosis(redentDef, answersWith()); // 全問1 → S ランク
+    dbMocks.getDiagnosisSubmissionByShareToken.mockResolvedValue(makeShareSubmission(result));
+    dbMocks.getDiagnosisById.mockResolvedValue(makeDiagRow());
+    const res = await req('GET', '/d/tok-share');
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain(`<div class="rank">${result.rank}</div>`);
+    expect(html).toContain(result.rankTitle);
+    expect(html).toContain(`スコア ${result.totalScore}点`);
+    for (const ax of result.axisScores) {
+      expect(html).toContain(ax.label);
+      expect(html).toContain(GRADE_SYMBOL[ax.grade]);
+    }
+  });
+
+  test('D7: 悩みタグ・カードタイトル・価格・axisMessages を出力しない', async () => {
+    const result = runDiagnosis(redentDef, answersWith({ S1: 5, T1: 5 }));
+    // フィクスチャ前提: カードとタグが立っていること(この前提が崩れたら検証が空振る)
+    expect(result.cards.length).toBeGreaterThan(0);
+    expect(result.tags.length).toBeGreaterThan(0);
+    dbMocks.getDiagnosisSubmissionByShareToken.mockResolvedValue(makeShareSubmission(result));
+    dbMocks.getDiagnosisById.mockResolvedValue(makeDiagRow());
+    const res = await req('GET', '/d/tok-share');
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    for (const card of result.cards) {
+      expect(html).not.toContain(card.title);
+      expect(html).not.toContain(String(card.priceInTax));
+      expect(html).not.toContain(String(card.priceExTax));
+    }
+    for (const tag of result.tags) {
+      expect(html).not.toContain(tag.tag);
+    }
+    for (const m of result.axisMessages) {
+      if (m.message) expect(html).not.toContain(m.message);
+    }
+    // result JSON 丸ごと埋め込み禁止の証跡(スナップショット固有キーが露出しない)
+    expect(html).not.toContain('cleanPoints');
+    expect(html).not.toContain('axisMessages');
+    expect(html).not.toContain('priceInTax');
+  });
+
+  test('存在しない shareToken は 404(簡素な HTML)', async () => {
+    dbMocks.getDiagnosisSubmissionByShareToken.mockResolvedValue(null);
+    const res = await req('GET', '/d/missing');
+    expect(res.status).toBe(404);
+    const html = await res.text();
+    expect(html).toContain('見つかりません');
+  });
+
+  test('is_active=1: 「自分も診断する」CTA を share.liffUrl で出力', async () => {
+    const result = runDiagnosis(redentDef, answersWith());
+    dbMocks.getDiagnosisSubmissionByShareToken.mockResolvedValue(makeShareSubmission(result));
+    dbMocks.getDiagnosisById.mockResolvedValue(makeDiagRow());
+    const res = await req('GET', '/d/tok-share');
+    const html = await res.text();
+    expect(html).toContain('自分も診断する');
+    expect(html).toContain(redentDef.share.liffUrl);
+  });
+
+  test('is_active=0: 表示は継続するが CTA ボタンを出さない', async () => {
+    const result = runDiagnosis(redentDef, answersWith());
+    dbMocks.getDiagnosisSubmissionByShareToken.mockResolvedValue(makeShareSubmission(result));
+    dbMocks.getDiagnosisById.mockResolvedValue(makeDiagRow({ is_active: 0 }));
+    const res = await req('GET', '/d/tok-share');
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).not.toContain('自分も診断する');
+    expect(html).toContain(result.rankTitle); // 結果自体は見える
+  });
+
+  test('診断削除済み(定義が引けない)でも結果表示・CTA なし(snapshot のみで描画)', async () => {
+    const result = runDiagnosis(redentDef, answersWith());
+    dbMocks.getDiagnosisSubmissionByShareToken.mockResolvedValue(makeShareSubmission(result));
+    dbMocks.getDiagnosisById.mockResolvedValue(null);
+    const res = await req('GET', '/d/tok-share');
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain(result.rankTitle);
+    expect(html).not.toContain('自分も診断する');
+  });
+
+  test('share.enabled=false は 404(共有機能無効の意思表示)', async () => {
+    const result = runDiagnosis(redentDef, answersWith());
+    dbMocks.getDiagnosisSubmissionByShareToken.mockResolvedValue(makeShareSubmission(result));
+    dbMocks.getDiagnosisById.mockResolvedValue(diagRowWithShare({ enabled: false }));
+    const res = await req('GET', '/d/tok-share');
+    expect(res.status).toBe(404);
+  });
+
+  test('OG: ogImages[rank] 設定時に og:image を出力', async () => {
+    const result = runDiagnosis(redentDef, answersWith()); // S
+    dbMocks.getDiagnosisSubmissionByShareToken.mockResolvedValue(makeShareSubmission(result));
+    dbMocks.getDiagnosisById.mockResolvedValue(
+      diagRowWithShare({
+        ogImages: { ...redentDef.share.ogImages, [result.rank]: 'https://cdn.example.com/og-s.png' },
+      }),
+    );
+    const res = await req('GET', '/d/tok-share');
+    const html = await res.text();
+    expect(html).toContain('<meta property="og:image" content="https://cdn.example.com/og-s.png">');
+  });
+
+  test('OG: ogImages[rank] が空文字なら og:image を出力しない', async () => {
+    const result = runDiagnosis(redentDef, answersWith());
+    dbMocks.getDiagnosisSubmissionByShareToken.mockResolvedValue(makeShareSubmission(result));
+    dbMocks.getDiagnosisById.mockResolvedValue(makeDiagRow()); // seed: 全ランク空文字
+    const res = await req('GET', '/d/tok-share');
+    const html = await res.text();
+    expect(html).not.toContain('og:image');
+  });
+
+  test('OG: ogTitleTemplate の {score}/{rankTitle} を展開', async () => {
+    const result = runDiagnosis(redentDef, answersWith());
+    dbMocks.getDiagnosisSubmissionByShareToken.mockResolvedValue(makeShareSubmission(result));
+    dbMocks.getDiagnosisById.mockResolvedValue(makeDiagRow());
+    const res = await req('GET', '/d/tok-share');
+    const html = await res.text();
+    const expected = `清潔感スコア${result.totalScore}点・${result.rankTitle}だった!`;
+    expect(html).toContain(`<meta property="og:title" content="${expected}">`);
+  });
+
+  test('HTML エスケープ: rankTitle の <script> を無害化', async () => {
+    const evil = {
+      rank: 'S',
+      rankTitle: '<script>alert(1)</script>',
+      totalScore: 88,
+      axisScores: [{ axisId: 'body', label: '体毛', score: 5, grade: 'keep' }],
+      cleanPoints: {},
+      weakestAxes: [],
+      rankSubcopy: '',
+      rankBody: '',
+      tags: [],
+      cards: [],
+      axisMessages: [],
+      droppedCards: [],
+      emptyState: true,
+      diagnosisName: "Re'Dent 清潔感診断",
+      minorNotice: '18歳未満の方のご契約には保護者の同意が必要です',
+    };
+    dbMocks.getDiagnosisSubmissionByShareToken.mockResolvedValue(makeShareSubmission(evil));
+    dbMocks.getDiagnosisById.mockResolvedValue(makeDiagRow());
+    const res = await req('GET', '/d/tok-share');
+    const html = await res.text();
+    expect(html).not.toContain('<script>alert(1)</script>');
+    expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+  });
+
+  test('フッターに診断名(diagnosisName)と注意書き(minorNotice)を表示', async () => {
+    const result = runDiagnosis(redentDef, answersWith());
+    dbMocks.getDiagnosisSubmissionByShareToken.mockResolvedValue(makeShareSubmission(result));
+    dbMocks.getDiagnosisById.mockResolvedValue(makeDiagRow());
+    const res = await req('GET', '/d/tok-share');
+    const html = await res.text();
+    // diagnosisName は ' を含むため escape 後の部分文字列で検証
+    expect(html).toContain('清潔感診断');
+    expect(html).toContain(result.minorNotice as string);
+  });
+
+  test('Cache-Control: public, max-age=300 を付与', async () => {
+    const result = runDiagnosis(redentDef, answersWith());
+    dbMocks.getDiagnosisSubmissionByShareToken.mockResolvedValue(makeShareSubmission(result));
+    dbMocks.getDiagnosisById.mockResolvedValue(makeDiagRow());
+    const res = await req('GET', '/d/tok-share');
+    expect(res.headers.get('Cache-Control')).toBe('public, max-age=300');
   });
 });
