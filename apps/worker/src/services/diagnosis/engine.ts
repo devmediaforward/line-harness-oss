@@ -13,13 +13,17 @@ import type {
   DiagnosisCondition,
   DiagnosisDefinition,
   DiagnosisResult,
+  DiagnosisResultPage,
   LookupResolver,
   PriorityRulesResolver,
   ResolverCard,
   ResultAxisMessage,
   ResultAxisScore,
   ResultCard,
+  ResultSoftCta,
   ResultTag,
+  ResultWeakPoint,
+  ResultEmptyStateTexts,
 } from '@line-crm/shared';
 import { keyTagSignature } from './signature.js';
 
@@ -378,7 +382,17 @@ export function runDiagnosis(
   // Step 6.4: 空状態(立ちタグ 0 件)
   const emptyState = standingTags.length === 0;
 
-  return {
+  // Step 8: 表示用スナップショット(02 データモデル: definition を再参照せず結果を
+  // 再構成できるよう、表示に必要な definition 由来文言を焼き込む)。validator は
+  // taxRate 以外を必須にしていないため、実行時は欠けうる。欠けていれば省略する。
+  const rp = definition.resultPage as Partial<DiagnosisResultPage>;
+  const axisById = new Map(axisScores.map((a) => [a.axisId, a] as const));
+  const weakPoints: ResultWeakPoint[] = weakestAxes
+    .map((id) => axisById.get(id))
+    .filter((a): a is ResultAxisScore => !!a && a.grade === 'warn')
+    .map((a) => ({ axisId: a.axisId, label: a.label, text: rp.weakPointTexts?.[a.axisId] ?? null }));
+
+  const result: DiagnosisResult = {
     cleanPoints,
     axisScores,
     weakestAxes,
@@ -392,5 +406,22 @@ export function runDiagnosis(
     axisMessages,
     droppedCards,
     emptyState,
+    weakPoints,
   };
+
+  if (typeof definition.meta?.name === 'string') result.diagnosisName = definition.meta.name;
+  if (typeof rp.weakPointHeading === 'string') result.weakPointHeading = rp.weakPointHeading;
+  if (typeof rp.minorNotice === 'string') result.minorNotice = rp.minorNotice;
+  if (rp.softCta && typeof rp.softCta.text === 'string') {
+    const softCta: ResultSoftCta = { text: rp.softCta.text };
+    if (typeof rp.softCta.subText === 'string') softCta.subText = rp.softCta.subText;
+    result.softCta = softCta;
+  }
+  if (rp.emptyState && typeof rp.emptyState.message === 'string') {
+    const emptyStateTexts: ResultEmptyStateTexts = { message: rp.emptyState.message };
+    if (typeof rp.emptyState.cta === 'string') emptyStateTexts.cta = rp.emptyState.cta;
+    result.emptyStateTexts = emptyStateTexts;
+  }
+
+  return result;
 }

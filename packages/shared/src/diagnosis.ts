@@ -286,6 +286,25 @@ export interface ResultAxisMessage {
   message: string;
 }
 
+/** △(warn)軸の弱点情報。text は resultPage.weakPointTexts 由来(無ければ null)。 */
+export interface ResultWeakPoint {
+  axisId: string;
+  label: string;
+  text: string | null;
+}
+
+/** ソフトCTA(resultPage.softCta のスナップショット)。 */
+export interface ResultSoftCta {
+  text: string;
+  subText?: string;
+}
+
+/** 空状態の文言(resultPage.emptyState のスナップショット)。 */
+export interface ResultEmptyStateTexts {
+  message: string;
+  cta?: string;
+}
+
 /** エンジン出力 = diagnosis_submissions.result に保存するスナップショット */
 export interface DiagnosisResult {
   /** questionId -> 清潔感ポイント(1..5) */
@@ -310,4 +329,23 @@ export interface DiagnosisResult {
   droppedCards: string[];
   /** タグ0件の空状態フラグ */
   emptyState: boolean;
+
+  // ---------------------------------------------------------------------------
+  // 表示用スナップショット(02 データモデル: definition を再参照せず結果ページ・
+  // 共有ページ・Flex を再構成できるよう、表示に必要な definition 由来文言を焼き込む)。
+  // すべて任意(後方互換)。definition 側に該当値が無い場合は省略される。
+  // ---------------------------------------------------------------------------
+
+  /** 診断名(definition.meta.name)。共有ページのフッター等に使用 */
+  diagnosisName?: string;
+  /** △軸セクションの見出し(resultPage.weakPointHeading) */
+  weakPointHeading?: string;
+  /** grade=warn の軸を weakestAxes 順に。text は resultPage.weakPointTexts[axisId](無ければ null) */
+  weakPoints?: ResultWeakPoint[];
+  /** ソフトCTA(resultPage.softCta) */
+  softCta?: ResultSoftCta;
+  /** 未成年注記(resultPage.minorNotice) */
+  minorNotice?: string;
+  /** 空状態の文言(resultPage.emptyState) */
+  emptyStateTexts?: ResultEmptyStateTexts;
 }

@@ -179,6 +179,41 @@ describe('validateDefinition — 構造検査(型崩れ)', () => {
     expect(errors.some((e: string) => e.includes('taxRate'))).toBe(true);
   });
 
+  it('resultPage.weakPointTexts の値が数値 → エラー', () => {
+    const def = clone();
+    def.resultPage.weakPointTexts.body = 123;
+    const errors = validateDefinition(def);
+    expect(errors.some((e: string) => e.includes('weakPointTexts'))).toBe(true);
+  });
+
+  it('resultPage.softCta.text が文字列でない → エラー', () => {
+    const def = clone();
+    def.resultPage.softCta.text = 5;
+    const errors = validateDefinition(def);
+    expect(errors.some((e: string) => e.includes('softCta'))).toBe(true);
+  });
+
+  it('resultPage.minorNotice が文字列でない → エラー', () => {
+    const def = clone();
+    def.resultPage.minorNotice = 42;
+    const errors = validateDefinition(def);
+    expect(errors.some((e: string) => e.includes('minorNotice'))).toBe(true);
+  });
+
+  it('resultPage.emptyState.message が文字列でない → エラー', () => {
+    const def = clone();
+    def.resultPage.emptyState.message = 1;
+    const errors = validateDefinition(def);
+    expect(errors.some((e: string) => e.includes('emptyState'))).toBe(true);
+  });
+
+  it('resultPage は taxRate のみでも(任意フィールド未指定)エラーにしない', () => {
+    const def = clone();
+    def.resultPage = { taxRate: 0.1 };
+    const errors = validateDefinition(def);
+    expect(errors.some((e: string) => e.includes('resultPage'))).toBe(false);
+  });
+
   it('resolver.type が不正 → エラー', () => {
     const def = clone();
     def.recommendation.resolvers.brow.type = 'unknownType';

@@ -553,10 +553,55 @@ function runValidation(input: unknown): string[] {
   }
 
   // ── resultPage ───────────────────────────────────────────────────────────
+  // taxRate 以外は任意。存在する場合のみ型検査する(未指定はエラーにしない)。
   if ('resultPage' in def && !isObj(def.resultPage)) {
     errors.push('resultPage がオブジェクトではありません');
-  } else if (isObj(def.resultPage) && typeof def.resultPage.taxRate !== 'number') {
-    errors.push('resultPage.taxRate が数値ではありません');
+  } else if (isObj(def.resultPage)) {
+    const rp = def.resultPage;
+    if (typeof rp.taxRate !== 'number') {
+      errors.push('resultPage.taxRate が数値ではありません');
+    }
+    if ('weakPointHeading' in rp && typeof rp.weakPointHeading !== 'string') {
+      errors.push('resultPage.weakPointHeading は文字列である必要があります');
+    }
+    if ('weakPointTexts' in rp) {
+      if (!isObj(rp.weakPointTexts)) {
+        errors.push('resultPage.weakPointTexts はオブジェクトである必要があります');
+      } else {
+        for (const [axisId, v] of Object.entries(rp.weakPointTexts)) {
+          if (typeof v !== 'string') {
+            errors.push(`resultPage.weakPointTexts["${axisId}"] は文字列である必要があります`);
+          }
+        }
+      }
+    }
+    if ('softCta' in rp) {
+      if (!isObj(rp.softCta)) {
+        errors.push('resultPage.softCta はオブジェクトである必要があります');
+      } else {
+        if (typeof rp.softCta.text !== 'string') {
+          errors.push('resultPage.softCta.text は文字列である必要があります');
+        }
+        if ('subText' in rp.softCta && typeof rp.softCta.subText !== 'string') {
+          errors.push('resultPage.softCta.subText は文字列である必要があります');
+        }
+      }
+    }
+    if ('minorNotice' in rp && typeof rp.minorNotice !== 'string') {
+      errors.push('resultPage.minorNotice は文字列である必要があります');
+    }
+    if ('emptyState' in rp) {
+      if (!isObj(rp.emptyState)) {
+        errors.push('resultPage.emptyState はオブジェクトである必要があります');
+      } else {
+        if (typeof rp.emptyState.message !== 'string') {
+          errors.push('resultPage.emptyState.message は文字列である必要があります');
+        }
+        if ('cta' in rp.emptyState && typeof rp.emptyState.cta !== 'string') {
+          errors.push('resultPage.emptyState.cta は文字列である必要があります');
+        }
+      }
+    }
   }
 
   return errors;
