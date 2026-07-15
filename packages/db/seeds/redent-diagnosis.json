@@ -1,0 +1,1222 @@
+{
+  "meta": {
+    "name": "Re'Dent 清潔感診断",
+    "description": "体毛・肌・眉・髪の4軸で、あなたの清潔感レベルを診断します(約2分)"
+  },
+  "axes": [
+    {
+      "id": "body",
+      "label": "体毛"
+    },
+    {
+      "id": "skin",
+      "label": "肌"
+    },
+    {
+      "id": "brow",
+      "label": "眉"
+    },
+    {
+      "id": "hair",
+      "label": "髪"
+    }
+  ],
+  "answerScale": {
+    "min": 1,
+    "max": 5,
+    "labels": [
+      "当てはまらない",
+      "あまり当てはまらない",
+      "どちらでもない",
+      "当てはまる",
+      "とても当てはまる"
+    ]
+  },
+  "questions": [
+    {
+      "id": "T1",
+      "axisId": "body",
+      "text": "剃っても、ヒゲの青さや剃り跡が目立つ",
+      "direction": "worry",
+      "worryTag": "顔(ヒゲ)"
+    },
+    {
+      "id": "T2",
+      "axisId": "body",
+      "text": "毎日のヒゲ剃りを、正直めんどくさいと感じる",
+      "direction": "worry",
+      "worryTag": "顔(ヒゲ)"
+    },
+    {
+      "id": "T3",
+      "axisId": "body",
+      "text": "汗をかくと、脇のニオイが気になる",
+      "direction": "worry",
+      "worryTag": "脇"
+    },
+    {
+      "id": "T4",
+      "axisId": "body",
+      "text": "半袖を着ると、腕の毛の濃さが目につく",
+      "direction": "worry",
+      "worryTag": "腕"
+    },
+    {
+      "id": "T5",
+      "axisId": "body",
+      "text": "すね毛を剃ったあとの、チクチクした感じが気になる",
+      "direction": "worry",
+      "worryTag": "脚"
+    },
+    {
+      "id": "T6",
+      "axisId": "body",
+      "text": "カミソリで剃ると、赤み・ブツブツ・埋もれた毛が出やすい",
+      "direction": "worry",
+      "worryTag": "自己処理トラブル"
+    },
+    {
+      "id": "T7",
+      "axisId": "body",
+      "text": "温泉やプールで、デリケートゾーンの毛が気になったことがある",
+      "direction": "worry",
+      "worryTag": "VIO"
+    },
+    {
+      "id": "T8",
+      "axisId": "body",
+      "text": "お風呂上がりに鏡を見て、お腹や胸の毛が気になる",
+      "direction": "worry",
+      "worryTag": "胴体"
+    },
+    {
+      "id": "T9",
+      "axisId": "body",
+      "text": "手の甲や指の毛を、人に見られたくないと思う",
+      "direction": "worry",
+      "worryTag": "手・指"
+    },
+    {
+      "id": "S1",
+      "axisId": "skin",
+      "text": "ニキビや吹き出物ができやすい",
+      "direction": "worry",
+      "worryTag": "ニキビ肌"
+    },
+    {
+      "id": "S2",
+      "axisId": "skin",
+      "text": "毛穴の黒ずみ・開きが気になる",
+      "direction": "worry",
+      "worryTag": "毛穴・ザラつき"
+    },
+    {
+      "id": "S3",
+      "axisId": "skin",
+      "text": "顔がテカりやすい・ベタつきやすい",
+      "direction": "worry",
+      "worryTag": "脂性・テカリ"
+    },
+    {
+      "id": "S4",
+      "axisId": "skin",
+      "text": "肌が乾燥してカサつきやすい",
+      "direction": "worry",
+      "worryTag": "乾燥・敏感"
+    },
+    {
+      "id": "S5",
+      "axisId": "skin",
+      "text": "肌がくすんで見える・ザラつく",
+      "direction": "worry",
+      "worryTag": "毛穴・ザラつき"
+    },
+    {
+      "id": "S6",
+      "axisId": "skin",
+      "text": "肌が赤くなりやすい・ヒリつきやすい",
+      "direction": "worry",
+      "worryTag": "乾燥・敏感"
+    },
+    {
+      "id": "S7",
+      "axisId": "skin",
+      "text": "ニキビの跡や色ムラが残りやすい",
+      "direction": "worry",
+      "worryTag": "ニキビ跡"
+    },
+    {
+      "id": "B1",
+      "axisId": "brow",
+      "text": "眉の形が左右でそろっていない",
+      "direction": "worry",
+      "worryTag": "眉の形・バランス"
+    },
+    {
+      "id": "B2",
+      "axisId": "brow",
+      "text": "眉の濃さ・薄さが気になる",
+      "direction": "worry",
+      "worryTag": "眉の形・バランス"
+    },
+    {
+      "id": "B3",
+      "axisId": "brow",
+      "text": "眉の形が決まらず、垢抜けない感じがする",
+      "direction": "worry",
+      "worryTag": "眉の形・バランス"
+    },
+    {
+      "id": "H1",
+      "axisId": "hair",
+      "text": "頭をかくと、頭皮がベタついたりニオったりする",
+      "direction": "worry",
+      "worryTag": "頭皮トラブル"
+    },
+    {
+      "id": "H2",
+      "axisId": "hair",
+      "text": "フケやかゆみが出る",
+      "direction": "worry",
+      "worryTag": "頭皮トラブル"
+    },
+    {
+      "id": "H3",
+      "axisId": "hair",
+      "text": "髪のパサつき・傷みが気になる",
+      "direction": "worry",
+      "worryTag": "髪のダメージ"
+    },
+    {
+      "id": "H4",
+      "axisId": "hair",
+      "text": "髪にツヤがなく、清潔感に欠ける気がする",
+      "direction": "worry",
+      "worryTag": "髪のダメージ"
+    },
+    {
+      "id": "H5",
+      "axisId": "hair",
+      "text": "フケが出るとしたら、脂っぽくベタついたフケだ",
+      "direction": "worry",
+      "worryTag": "頭皮トラブル(脂性)"
+    },
+    {
+      "id": "H6",
+      "axisId": "hair",
+      "text": "髪のうねり・くせ・広がりが気になる",
+      "direction": "worry",
+      "worryTag": "髪のダメージ"
+    }
+  ],
+  "scoring": {
+    "tagThreshold": 2,
+    "severityTags": [
+      "ニキビ肌"
+    ],
+    "tagMerges": {
+      "手・指": "腕"
+    },
+    "axisGrades": {
+      "keep": {
+        "min": 4.0,
+        "label": "◎ キープ",
+        "meaning": "維持でOK"
+      },
+      "almost": {
+        "min": 3.0,
+        "label": "○ あと一歩",
+        "meaning": "伸びしろ"
+      },
+      "warn": {
+        "min": null,
+        "label": "△ 今いちばん効く",
+        "meaning": "最優先"
+      }
+    },
+    "ranks": [
+      {
+        "rank": "D",
+        "min": 0,
+        "title": "清潔感 見習い(Beginner)",
+        "subcopy": "のびしろは無限大。ここがスタートライン",
+        "body": "清潔感づくりは、ここからがスタート。今は気づいていない伸びしろがたっぷり眠っている状態です。気になるポイントを一つ整えるだけで、印象は一気に変わります。"
+      },
+      {
+        "rank": "C",
+        "min": 20,
+        "title": "清潔感 駆け出し(Rookie)",
+        "subcopy": "基本はOK。あと少しで“ちゃんとしてる人”",
+        "body": "基本はできていて、あと少しで“ちゃんとしてる人”に見えるライン。弱点を1〜2個つぶせば、一段上のBランクが見えてきます。"
+      },
+      {
+        "rank": "B",
+        "min": 40,
+        "title": "清潔感 一人前(Standard)",
+        "subcopy": "好印象の合格ライン突破",
+        "body": "清潔感の合格ライン突破。パッと見で好印象を持たれるレベルです。さらに弱点を整えると、こなれ感が出て上位ランクへ。"
+      },
+      {
+        "rank": "A",
+        "min": 60,
+        "title": "清潔感 上級者(Expert)",
+        "subcopy": "周りと差がつく上級レベル",
+        "body": "周りと差がつく上級レベル。細かい所まで手が回っています。あとは弱点の軸をゼロにできれば、いよいよ頂点のSランクです。"
+      },
+      {
+        "rank": "S",
+        "min": 80,
+        "title": "清潔感 マスター(Legend)",
+        "subcopy": "隙のない清潔感の頂点",
+        "body": "隙のない清潔感の頂点。今のレベルをキープしつつ、季節やコンディションに合わせて微調整していくフェーズです。"
+      }
+    ]
+  },
+  "recommendation": {
+    "maxTotal": 3,
+    "maxPerAxis": 1,
+    "resolvers": {
+      "body": {
+        "type": "lookup",
+        "keyTags": [
+          "顔(ヒゲ)",
+          "胴体",
+          "腕",
+          "脇",
+          "VIO",
+          "脚"
+        ],
+        "specialTags": {
+          "自己処理トラブル": {
+            "mode": "appeal",
+            "appealText": "処理のたびに赤みや埋没毛が出ているなら、肌へのダメージが積み重なっているサイン。続ける限り繰り返します。脱毛は“処理をやめられる”のがいちばんのメリットです。",
+            "soloMessage": "自己処理で荒れやすいなら、気になる部位だけでも脱毛で根本ケアできます。無料カウンセリングもあります。"
+          }
+        },
+        "table": [
+          {
+            "key": [
+              "顔(ヒゲ)"
+            ],
+            "title": "顔",
+            "priceExTax": 7000,
+            "extras": []
+          },
+          {
+            "key": [
+              "胴体"
+            ],
+            "title": "胴体",
+            "priceExTax": 9000,
+            "extras": []
+          },
+          {
+            "key": [
+              "腕"
+            ],
+            "title": "腕",
+            "priceExTax": 7000,
+            "extras": []
+          },
+          {
+            "key": [
+              "脇"
+            ],
+            "title": "脇",
+            "priceExTax": 1000,
+            "extras": []
+          },
+          {
+            "key": [
+              "VIO"
+            ],
+            "title": "VIO",
+            "priceExTax": 7000,
+            "extras": []
+          },
+          {
+            "key": [
+              "脚"
+            ],
+            "title": "脚",
+            "priceExTax": 9000,
+            "extras": []
+          },
+          {
+            "key": [
+              "顔(ヒゲ)",
+              "胴体"
+            ],
+            "title": "上半身セット",
+            "priceExTax": 15000,
+            "extras": [
+              "腕",
+              "脇"
+            ]
+          },
+          {
+            "key": [
+              "顔(ヒゲ)",
+              "腕"
+            ],
+            "title": "顔・腕セット",
+            "priceExTax": 11000,
+            "extras": []
+          },
+          {
+            "key": [
+              "顔(ヒゲ)",
+              "脇"
+            ],
+            "title": "顔＋脇",
+            "priceExTax": 8000,
+            "extras": []
+          },
+          {
+            "key": [
+              "顔(ヒゲ)",
+              "VIO"
+            ],
+            "title": "顔＋VIO",
+            "priceExTax": 14000,
+            "extras": []
+          },
+          {
+            "key": [
+              "顔(ヒゲ)",
+              "脚"
+            ],
+            "title": "顔・脚セット",
+            "priceExTax": 12000,
+            "extras": []
+          },
+          {
+            "key": [
+              "胴体",
+              "腕"
+            ],
+            "title": "全身C",
+            "priceExTax": 16000,
+            "extras": [
+              "脇",
+              "脚"
+            ]
+          },
+          {
+            "key": [
+              "胴体",
+              "脇"
+            ],
+            "title": "胴体＋脇",
+            "priceExTax": 10000,
+            "extras": []
+          },
+          {
+            "key": [
+              "胴体",
+              "VIO"
+            ],
+            "title": "胴体＋VIO",
+            "priceExTax": 16000,
+            "extras": []
+          },
+          {
+            "key": [
+              "胴体",
+              "脚"
+            ],
+            "title": "全身C",
+            "priceExTax": 16000,
+            "extras": [
+              "腕",
+              "脇"
+            ]
+          },
+          {
+            "key": [
+              "腕",
+              "脇"
+            ],
+            "title": "腕＋脇",
+            "priceExTax": 8000,
+            "extras": []
+          },
+          {
+            "key": [
+              "腕",
+              "VIO"
+            ],
+            "title": "腕＋VIO",
+            "priceExTax": 14000,
+            "extras": []
+          },
+          {
+            "key": [
+              "腕",
+              "脚"
+            ],
+            "title": "腕・脚セット",
+            "priceExTax": 12000,
+            "extras": []
+          },
+          {
+            "key": [
+              "脇",
+              "VIO"
+            ],
+            "title": "脇＋VIO",
+            "priceExTax": 8000,
+            "extras": []
+          },
+          {
+            "key": [
+              "脇",
+              "脚"
+            ],
+            "title": "脇＋脚",
+            "priceExTax": 10000,
+            "extras": []
+          },
+          {
+            "key": [
+              "VIO",
+              "脚"
+            ],
+            "title": "下半身セット",
+            "priceExTax": 12000,
+            "extras": []
+          },
+          {
+            "key": [
+              "顔(ヒゲ)",
+              "胴体",
+              "腕"
+            ],
+            "title": "上半身セット",
+            "priceExTax": 15000,
+            "extras": [
+              "脇"
+            ]
+          },
+          {
+            "key": [
+              "顔(ヒゲ)",
+              "胴体",
+              "脇"
+            ],
+            "title": "上半身セット",
+            "priceExTax": 15000,
+            "extras": [
+              "腕"
+            ]
+          },
+          {
+            "key": [
+              "顔(ヒゲ)",
+              "胴体",
+              "VIO"
+            ],
+            "title": "全身A",
+            "priceExTax": 20000,
+            "extras": [
+              "腕",
+              "脇",
+              "脚"
+            ]
+          },
+          {
+            "key": [
+              "顔(ヒゲ)",
+              "胴体",
+              "脚"
+            ],
+            "title": "全身B（顔選択/VIOなし）",
+            "priceExTax": 18000,
+            "extras": [
+              "腕",
+              "脇"
+            ]
+          },
+          {
+            "key": [
+              "顔(ヒゲ)",
+              "腕",
+              "脇"
+            ],
+            "title": "脇＋顔・腕セット",
+            "priceExTax": 12000,
+            "extras": []
+          },
+          {
+            "key": [
+              "顔(ヒゲ)",
+              "腕",
+              "VIO"
+            ],
+            "title": "VIO＋顔・腕セット",
+            "priceExTax": 18000,
+            "extras": []
+          },
+          {
+            "key": [
+              "顔(ヒゲ)",
+              "腕",
+              "脚"
+            ],
+            "title": "顔・腕・脚セット",
+            "priceExTax": 16000,
+            "extras": []
+          },
+          {
+            "key": [
+              "顔(ヒゲ)",
+              "脇",
+              "VIO"
+            ],
+            "title": "顔＋脇＋VIO",
+            "priceExTax": 15000,
+            "extras": []
+          },
+          {
+            "key": [
+              "顔(ヒゲ)",
+              "脇",
+              "脚"
+            ],
+            "title": "脇＋顔・脚セット",
+            "priceExTax": 13000,
+            "extras": []
+          },
+          {
+            "key": [
+              "顔(ヒゲ)",
+              "VIO",
+              "脚"
+            ],
+            "title": "顔＋下半身セット",
+            "priceExTax": 19000,
+            "extras": []
+          },
+          {
+            "key": [
+              "胴体",
+              "腕",
+              "脇"
+            ],
+            "title": "全身C",
+            "priceExTax": 16000,
+            "extras": [
+              "脚"
+            ]
+          },
+          {
+            "key": [
+              "胴体",
+              "腕",
+              "VIO"
+            ],
+            "title": "全身B（VIO選択/顔なし）",
+            "priceExTax": 18000,
+            "extras": [
+              "脇",
+              "脚"
+            ]
+          },
+          {
+            "key": [
+              "胴体",
+              "腕",
+              "脚"
+            ],
+            "title": "全身C",
+            "priceExTax": 16000,
+            "extras": [
+              "脇"
+            ]
+          },
+          {
+            "key": [
+              "胴体",
+              "脇",
+              "VIO"
+            ],
+            "title": "胴体＋脇＋VIO",
+            "priceExTax": 17000,
+            "extras": []
+          },
+          {
+            "key": [
+              "胴体",
+              "脇",
+              "脚"
+            ],
+            "title": "全身C",
+            "priceExTax": 16000,
+            "extras": [
+              "腕"
+            ]
+          },
+          {
+            "key": [
+              "胴体",
+              "VIO",
+              "脚"
+            ],
+            "title": "全身B（VIO選択/顔なし）",
+            "priceExTax": 18000,
+            "extras": [
+              "腕",
+              "脇"
+            ]
+          },
+          {
+            "key": [
+              "腕",
+              "脇",
+              "VIO"
+            ],
+            "title": "腕＋脇＋VIO",
+            "priceExTax": 15000,
+            "extras": []
+          },
+          {
+            "key": [
+              "腕",
+              "脇",
+              "脚"
+            ],
+            "title": "脇＋腕・脚セット",
+            "priceExTax": 13000,
+            "extras": []
+          },
+          {
+            "key": [
+              "腕",
+              "VIO",
+              "脚"
+            ],
+            "title": "全身B（VIO選択/顔なし）",
+            "priceExTax": 18000,
+            "extras": [
+              "胴体",
+              "脇"
+            ]
+          },
+          {
+            "key": [
+              "脇",
+              "VIO",
+              "脚"
+            ],
+            "title": "脇＋下半身セット",
+            "priceExTax": 13000,
+            "extras": []
+          },
+          {
+            "key": [
+              "顔(ヒゲ)",
+              "胴体",
+              "腕",
+              "脇"
+            ],
+            "title": "上半身セット",
+            "priceExTax": 15000,
+            "extras": []
+          },
+          {
+            "key": [
+              "顔(ヒゲ)",
+              "胴体",
+              "腕",
+              "VIO"
+            ],
+            "title": "全身A",
+            "priceExTax": 20000,
+            "extras": [
+              "脇",
+              "脚"
+            ]
+          },
+          {
+            "key": [
+              "顔(ヒゲ)",
+              "胴体",
+              "腕",
+              "脚"
+            ],
+            "title": "全身B（顔選択/VIOなし）",
+            "priceExTax": 18000,
+            "extras": [
+              "脇"
+            ]
+          },
+          {
+            "key": [
+              "顔(ヒゲ)",
+              "胴体",
+              "脇",
+              "VIO"
+            ],
+            "title": "全身A",
+            "priceExTax": 20000,
+            "extras": [
+              "腕",
+              "脚"
+            ]
+          },
+          {
+            "key": [
+              "顔(ヒゲ)",
+              "胴体",
+              "脇",
+              "脚"
+            ],
+            "title": "全身B（顔選択/VIOなし）",
+            "priceExTax": 18000,
+            "extras": [
+              "腕"
+            ]
+          },
+          {
+            "key": [
+              "顔(ヒゲ)",
+              "胴体",
+              "VIO",
+              "脚"
+            ],
+            "title": "全身A",
+            "priceExTax": 20000,
+            "extras": [
+              "腕",
+              "脇"
+            ]
+          },
+          {
+            "key": [
+              "顔(ヒゲ)",
+              "腕",
+              "脇",
+              "VIO"
+            ],
+            "title": "脇＋VIO＋顔・腕セット",
+            "priceExTax": 19000,
+            "extras": []
+          },
+          {
+            "key": [
+              "顔(ヒゲ)",
+              "腕",
+              "脇",
+              "脚"
+            ],
+            "title": "脇＋顔・腕・脚セット",
+            "priceExTax": 17000,
+            "extras": []
+          },
+          {
+            "key": [
+              "顔(ヒゲ)",
+              "腕",
+              "VIO",
+              "脚"
+            ],
+            "title": "全身A",
+            "priceExTax": 20000,
+            "extras": [
+              "胴体",
+              "脇"
+            ]
+          },
+          {
+            "key": [
+              "顔(ヒゲ)",
+              "脇",
+              "VIO",
+              "脚"
+            ],
+            "title": "顔＋脇＋下半身セット",
+            "priceExTax": 20000,
+            "extras": []
+          },
+          {
+            "key": [
+              "胴体",
+              "腕",
+              "脇",
+              "VIO"
+            ],
+            "title": "全身B（VIO選択/顔なし）",
+            "priceExTax": 18000,
+            "extras": [
+              "脚"
+            ]
+          },
+          {
+            "key": [
+              "胴体",
+              "腕",
+              "脇",
+              "脚"
+            ],
+            "title": "全身C",
+            "priceExTax": 16000,
+            "extras": []
+          },
+          {
+            "key": [
+              "胴体",
+              "腕",
+              "VIO",
+              "脚"
+            ],
+            "title": "全身B（VIO選択/顔なし）",
+            "priceExTax": 18000,
+            "extras": [
+              "脇"
+            ]
+          },
+          {
+            "key": [
+              "胴体",
+              "脇",
+              "VIO",
+              "脚"
+            ],
+            "title": "全身B（VIO選択/顔なし）",
+            "priceExTax": 18000,
+            "extras": [
+              "腕"
+            ]
+          },
+          {
+            "key": [
+              "腕",
+              "脇",
+              "VIO",
+              "脚"
+            ],
+            "title": "全身B（VIO選択/顔なし）",
+            "priceExTax": 18000,
+            "extras": [
+              "胴体"
+            ]
+          },
+          {
+            "key": [
+              "顔(ヒゲ)",
+              "胴体",
+              "腕",
+              "脇",
+              "VIO"
+            ],
+            "title": "全身A",
+            "priceExTax": 20000,
+            "extras": [
+              "脚"
+            ]
+          },
+          {
+            "key": [
+              "顔(ヒゲ)",
+              "胴体",
+              "腕",
+              "脇",
+              "脚"
+            ],
+            "title": "全身B（顔選択/VIOなし）",
+            "priceExTax": 18000,
+            "extras": []
+          },
+          {
+            "key": [
+              "顔(ヒゲ)",
+              "胴体",
+              "腕",
+              "VIO",
+              "脚"
+            ],
+            "title": "全身A",
+            "priceExTax": 20000,
+            "extras": [
+              "脇"
+            ]
+          },
+          {
+            "key": [
+              "顔(ヒゲ)",
+              "胴体",
+              "脇",
+              "VIO",
+              "脚"
+            ],
+            "title": "全身A",
+            "priceExTax": 20000,
+            "extras": [
+              "腕"
+            ]
+          },
+          {
+            "key": [
+              "顔(ヒゲ)",
+              "腕",
+              "脇",
+              "VIO",
+              "脚"
+            ],
+            "title": "全身A",
+            "priceExTax": 20000,
+            "extras": [
+              "胴体"
+            ]
+          },
+          {
+            "key": [
+              "胴体",
+              "腕",
+              "脇",
+              "VIO",
+              "脚"
+            ],
+            "title": "全身B（VIO選択/顔なし）",
+            "priceExTax": 18000,
+            "extras": []
+          },
+          {
+            "key": [
+              "顔(ヒゲ)",
+              "胴体",
+              "腕",
+              "脇",
+              "VIO",
+              "脚"
+            ],
+            "title": "全身A",
+            "priceExTax": 20000,
+            "extras": []
+          }
+        ],
+        "reasonTemplate": "気になるムダ毛をまとめてケア。自己処理の回数を減らせれば、清潔感も肌の負担も軽くなります。",
+        "reasonByTag": {
+          "顔(ヒゲ)": "夕方の青ヒゲや剃り跡は、自分では気づきにくいけど顔の印象を大きく左右するポイント。自己処理の回数を減らせれば、清潔感も肌の負担もまとめて軽くなります。"
+        },
+        "extrasTemplate": "気になる{parts}に加えて{extras}もまとめてケアできて、別々に受けるよりお得なセットです。"
+      },
+      "skin": {
+        "type": "priorityRules",
+        "rules": [
+          {
+            "id": "acne-severe",
+            "if": {
+              "hasTagWithPoint": {
+                "tag": "ニキビ肌",
+                "point": 1
+              }
+            },
+            "card": {
+              "title": "ニキビ徹底改善コース",
+              "priceExTax": 15000,
+              "reason": "ニキビは“不潔そう”に見られやすい部分。洗顔だけでリセットするのは難しいので、今の肌に合ったケアで土台から整えるのが近道です。"
+            },
+            "conditionalNotes": [
+              {
+                "if": {
+                  "hasTag": "乾燥・敏感"
+                },
+                "note": "コースにピーリング工程が含まれるため、敏感肌の方は要カウンセリングです"
+              }
+            ]
+          },
+          {
+            "id": "sensitive",
+            "if": {
+              "hasTag": "乾燥・敏感"
+            },
+            "card": {
+              "title": "光フェイシャル ＋ 保湿(保湿パック または ハリツヤ集中保湿)",
+              "priceExTax": 7000,
+              "priceSuffix": "＋",
+              "reason": "乾燥や赤みが出やすい肌は、刺激の少ないケアで土台から整えるのが近道です。"
+            }
+          },
+          {
+            "id": "combo",
+            "if": {
+              "spansGroups": {
+                "groupA": [
+                  "毛穴・ザラつき",
+                  "ニキビ跡"
+                ],
+                "groupB": [
+                  "脂性・テカリ",
+                  "ニキビ肌@2",
+                  "ニキビ跡"
+                ],
+                "minTags": 2
+              }
+            },
+            "card": {
+              "title": "ピーリング・光フェイシャルセット",
+              "priceExTax": 12000,
+              "reason": "複数の肌悩みにまとめて効く組み合わせ。すべての肌トラブルに効果的なセットです。"
+            }
+          },
+          {
+            "id": "single",
+            "if": {
+              "always": true
+            },
+            "cardByTag": {
+              "ニキビ肌@2": {
+                "title": "光フェイシャル+",
+                "priceExTax": 8000,
+                "reason": "ニキビは“不潔そう”に見られやすい部分。今の肌に合ったケアで土台から整えるのが近道です。"
+              },
+              "ニキビ跡": {
+                "title": "ピーリング・光フェイシャルセット",
+                "priceExTax": 12000,
+                "reason": "残ったニキビ跡・色ムラには、角質ケアと光ケアの組み合わせが効果的です。"
+              },
+              "毛穴・ザラつき": {
+                "title": "ピーリング",
+                "priceExTax": 7000,
+                "reason": "毛穴の黒ずみ・ザラつきは、角質ケアで土台からリセットするのが近道です。"
+              },
+              "脂性・テカリ": {
+                "title": "光フェイシャル",
+                "priceExTax": 7000,
+                "reason": "テカリやすい肌は、皮脂バランスを整えるケアで印象が変わります。"
+              }
+            }
+          }
+        ]
+      },
+      "brow": {
+        "type": "priorityRules",
+        "rules": [
+          {
+            "id": "brow-styling",
+            "if": {
+              "hasTag": "眉の形・バランス"
+            },
+            "card": {
+              "title": "美眉スタイリング(学生)",
+              "priceExTax": 4000,
+              "reason": "眉は顔の印象を大きく決めるパーツ。プロに形を整えてもらうだけで、一気に垢抜けます。"
+            }
+          }
+        ]
+      },
+      "hair": {
+        "type": "priorityRules",
+        "rules": [
+          {
+            "id": "scalp",
+            "if": {
+              "hasAnyTag": [
+                "頭皮トラブル",
+                "頭皮トラブル(脂性)"
+              ]
+            },
+            "card": {
+              "title": "ヘッドスパ",
+              "priceExTax": 7000,
+              "reason": "頭皮のベタつき・ニオイ・フケは、サロンで皮脂と角質をリセットするのが近道です。"
+            },
+            "homecareAdvice": [
+              {
+                "if": {
+                  "hasTag": "頭皮トラブル(脂性)"
+                },
+                "advice": "ホームケアは、さっぱり系シャンプーがおすすめです。"
+              },
+              {
+                "if": {
+                  "always": true
+                },
+                "advice": "ホームケアは、保湿系シャンプーがおすすめです。"
+              }
+            ]
+          },
+          {
+            "id": "damage-tbd",
+            "if": {
+              "hasTag": "髪のダメージ"
+            },
+            "card": null
+          }
+        ]
+      }
+    },
+    "noteRules": [
+      {
+        "if": {
+          "and": [
+            {
+              "hasTag": "毛穴・ザラつき"
+            },
+            {
+              "hasTag": "顔(ヒゲ)"
+            }
+          ]
+        },
+        "attachTo": [
+          "skin",
+          "body"
+        ],
+        "note": "ピーリング・顔脱毛セット ¥13,200(税込)(毛穴を引き締め・¥2,200お得)もあります"
+      },
+      {
+        "if": {
+          "cardsPresent": [
+            "brow",
+            "body"
+          ]
+        },
+        "attachTo": [
+          "brow"
+        ],
+        "note": "脱毛と一緒で1,000円OFF(学生 ¥4,400 → ¥3,300 税込)"
+      }
+    ]
+  },
+  "resultPage": {
+    "taxRate": 0.1,
+    "weakPointHeading": "今いちばん効くポイント",
+    "weakPointTexts": {
+      "body": "ムダ毛ケアが今いちばんの伸びしろ。特に顔まわりは第一印象に直結します。",
+      "skin": "肌のコンディションを整えると、清潔感が一段上がります。",
+      "brow": "眉を整えるだけで、顔全体が垢抜けて見えます。",
+      "hair": "髪・頭皮のケアが、清潔感の仕上げになります。"
+    },
+    "softCta": {
+      "text": "気になったメニューから、体験・相談へ",
+      "subText": "Re'Dentは学生特化だから、はじめてでも相談しやすいです。無料カウンセリング／体験もあります"
+    },
+    "minorNotice": "18歳未満の方のご契約には保護者の同意が必要です",
+    "emptyState": {
+      "message": "今のレベルをキープしつつ、季節やコンディションに合わせて微調整していくフェーズです",
+      "cta": "気になったら相談もできます"
+    }
+  },
+  "share": {
+    "enabled": true,
+    "ogImages": {
+      "D": "",
+      "C": "",
+      "B": "",
+      "A": "",
+      "S": ""
+    },
+    "ogTitleTemplate": "清潔感スコア{score}点・{rankTitle}だった!",
+    "ogDescription": "体毛・肌・眉・髪の4軸で清潔感レベルを診断。あなたは何ランク?",
+    "addFriendUrl": "https://line.me/R/ti/p/@REPLACE_WITH_REDENT_BASIC_ID",
+    "liffUrl": "https://liff.line.me/REPLACE_LIFF_ID/diagnosis/redent-cleanliness",
+    "shareText": "清潔感診断やってみた! {score}点・{rankTitle}"
+  },
+  "sideEffects": {
+    "sendResultMessage": true,
+    "addTags": false,
+    "enrollScenarioId": null,
+    "saveToMetadata": false
+  }
+}
