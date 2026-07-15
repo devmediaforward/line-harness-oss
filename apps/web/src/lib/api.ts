@@ -32,6 +32,8 @@ import type {
   EntryRouteFunnel,
   TrafficPool,
   PoolAccount,
+  DiagnosisDefinition,
+  DiagnosisResult,
 } from '@line-crm/shared'
 
 /** Affiliate offer (案件) as returned by the worker. */
@@ -155,6 +157,68 @@ export type FriendListParams = {
   sort?: 'recent' | 'oldest'
   /** `unhandled` で「最新が未返信の incoming」だけに絞る (サーバ側 SQL filter). */
   handled?: 'unhandled'
+}
+
+// ── Diagnoses (診断) ────────────────────────────────────────────────────────
+
+/** GET /api/diagnoses の一覧行 (definition なし)。 */
+export type DiagnosisListItem = {
+  id: string
+  name: string
+  slug: string | null
+  isActive: boolean
+  submitCount: number
+  updatedAt: string
+  lastSubmittedAt: string | null
+}
+
+/** GET /api/diagnoses/:id・作成・更新のレスポンス (definition 含む)。 */
+export type DiagnosisDetail = {
+  id: string
+  name: string
+  slug: string | null
+  definition: DiagnosisDefinition
+  definitionVersion: number
+  isActive: boolean
+  submitCount: number
+  createdAt: string
+  updatedAt: string
+}
+
+/** 回答一覧行 (rank/score サマリ)。 */
+export type DiagnosisSubmissionSummary = {
+  id: string
+  diagnosisId: string
+  friendId: string | null
+  friendName: string | null
+  lineUserId: string
+  rank: string | null
+  totalScore: number | null
+  shareToken: string | null
+  createdAt: string
+}
+
+/** 回答詳細 (answers + result スナップショット)。 */
+export type DiagnosisSubmissionDetail = {
+  id: string
+  diagnosisId: string
+  friendId: string | null
+  lineUserId: string
+  definitionVersion: number
+  answers: Record<string, number>
+  result: DiagnosisResult
+  shareToken: string | null
+  createdAt: string
+}
+
+/** GET /api/diagnoses/:id/stats。 */
+export type DiagnosisStats = {
+  total: number
+  rankDistribution: Record<string, number>
+  scoreHistogram: Array<{ bucket: string; count: number }>
+  axisAverages: Array<{ axisId: string; avg: number }>
+  tagCounts: Array<{ tag: string; count: number }>
+  cardCounts: Array<{ title: string; count: number }>
 }
 
 export type FriendWithTags = Friend & { tags: Tag[] }
@@ -875,6 +939,56 @@ export const api = {
       fetchApi<ApiResponse<{ totalScore: number; history: { id: string; scoreChange: number; reason: string | null; createdAt: string }[] }>>(
         `/api/friends/${friendId}/score`,
       ),
+  },
+  diagnoses: {
+    list: () =>
+      fetchApi<{ success: boolean; data: DiagnosisListItem[] }>('/api/diagnoses'),
+    get: (id: string) =>
+      fetchApi<{ success: boolean; data: DiagnosisDetail }>(`/api/diagnoses/${id}`),
+    create: (data: { name: string; slug?: string | null; definition: DiagnosisDefinition }) =>
+      fetchApi<{ success: boolean; data: DiagnosisDetail; error?: string; errors?: string[] }>(
+        '/api/diagnoses',
+        { method: 'POST', body: JSON.stringify(data) },
+      ),
+    update: (
+      id: string,
+      data: { name?: string; slug?: string | null; isActive?: boolean; definition?: DiagnosisDefinition },
+    ) =>
+      fetchApi<{ success: boolean; data: DiagnosisDetail; error?: string; errors?: string[] }>(
+        `/api/diagnoses/${id}`,
+        { method: 'PUT', body: JSON.stringify(data) },
+      ),
+    delete: (id: string) =>
+      fetchApi<{ success: boolean; data: null }>(`/api/diagnoses/${id}`, { method: 'DELETE' }),
+    // 保存せず検証だけ行う (定義エラーの日本語メッセージ配列を返す)。
+    validate: (definition: unknown) =>
+      fetchApi<{ success: boolean; data: { valid: boolean; errors: string[] } }>(
+        '/api/diagnoses/validate',
+        { method: 'POST', body: JSON.stringify({ definition }) },
+      ),
+    // 採点エンジンをサーバ保存済み definition に対して実行 (保存・副作用なし)。
+    preview: (id: string, answers: Record<string, number>) =>
+      fetchApi<{ success: boolean; data: { result: DiagnosisResult }; error?: string }>(
+        `/api/diagnoses/${id}/preview`,
+        { method: 'POST', body: JSON.stringify({ answers }) },
+      ),
+    submissions: (id: string, params?: { limit?: number; offset?: number }) => {
+      const p = new URLSearchParams()
+      if (params?.limit !== undefined) p.set('limit', String(params.limit))
+      if (params?.offset !== undefined) p.set('offset', String(params.offset))
+      const qs = p.toString()
+      return fetchApi<{
+        success: boolean
+        data: DiagnosisSubmissionSummary[]
+        pagination: { total: number; limit: number; offset: number }
+      }>(`/api/diagnoses/${id}/submissions${qs ? `?${qs}` : ''}`)
+    },
+    submission: (id: string, sid: string) =>
+      fetchApi<{ success: boolean; data: DiagnosisSubmissionDetail }>(
+        `/api/diagnoses/${id}/submissions/${sid}`,
+      ),
+    stats: (id: string) =>
+      fetchApi<{ success: boolean; data: DiagnosisStats }>(`/api/diagnoses/${id}/stats`),
   },
   webhooks: {
     incoming: {
