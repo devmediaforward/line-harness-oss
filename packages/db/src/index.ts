@@ -22,6 +22,7 @@ export * from './automations';
 export * from './entry-routes';
 export * from './tracked-links';
 export * from './forms';
+export * from './diagnoses';
 export * from './ad-platforms';
 export * from './staff';
 export * from './auto-replies';
