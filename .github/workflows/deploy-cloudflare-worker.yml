@@ -3,7 +3,7 @@ name: Deploy Cloudflare Worker
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, develop]
     paths:
       - 'apps/worker/**'
       - 'apps/liff/**'
@@ -12,9 +12,12 @@ on:
       - 'packages/line-sdk/**'
       - '.github/workflows/deploy-cloudflare-worker.yml'
 
+concurrency: deploy-worker-${{ github.ref }}
+
 jobs:
   deploy:
     if: github.repository != 'Shudesu/line-harness-oss' && vars.LINE_HARNESS_CLOUDFLARE_DEPLOY == 'true'
+    environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'development' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

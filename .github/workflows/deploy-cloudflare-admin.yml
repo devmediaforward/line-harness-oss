@@ -3,7 +3,7 @@ name: Deploy Cloudflare Admin
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, develop]
     paths:
       - 'apps/web/**'
       - 'packages/shared/**'
@@ -11,9 +11,12 @@ on:
       - 'pnpm-lock.yaml'
       - '.github/workflows/deploy-cloudflare-admin.yml'
 
+concurrency: deploy-admin-${{ github.ref }}
+
 jobs:
   deploy:
     if: github.repository != 'Shudesu/line-harness-oss' && vars.LINE_HARNESS_CLOUDFLARE_DEPLOY == 'true'
+    environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'development' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

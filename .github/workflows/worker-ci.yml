@@ -11,7 +11,7 @@ on:
       - 'pnpm-lock.yaml'
       - '.github/workflows/worker-ci.yml'
   push:
-    branches: [main]
+    branches: [main, develop]
     paths:
       - 'apps/worker/**'
       - 'packages/db/**'
