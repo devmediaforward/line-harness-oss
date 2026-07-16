@@ -29,7 +29,9 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @line-crm/shared build
+      # update-engine は apps/web の update-banner が import する(@line-harness/update-engine/pure)。
+      # 本家 workflow のビルド漏れ(バナー機能追加時に未更新)のためフォーク側で追加。
+      - run: pnpm --filter @line-crm/shared --filter @line-harness/update-engine build
 
       - name: Capture build metadata
         id: build-meta
