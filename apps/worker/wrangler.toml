@@ -18,6 +18,9 @@ binding = "ASSETS"
 # SPA を返す。これが無いと static asset path が Worker をバイパスして
 # 直接配信され、bot 判定が効かない。
 run_worker_first = true
+# LIFF は BrowserRouter(パス型ルート: /booking, /diagnosis/:slug 等)のため、
+# 未知パスは index.html を返す(無いと LIFF 永続リンクの深いパスが 404 になる)。
+not_found_handling = "single-page-application"
 
 [[d1_databases]]
 binding = "DB"
@@ -63,6 +66,7 @@ compatibility_flags = ["nodejs_compat"]
 directory = "dist/client"
 binding = "ASSETS"
 run_worker_first = true
+not_found_handling = "single-page-application"
 
 [[env.production.d1_databases]]
 binding = "DB"
