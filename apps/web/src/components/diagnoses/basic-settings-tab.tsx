@@ -344,8 +344,8 @@ export default function BasicSettingsTab({
           <div>
             <span className="block text-xs font-medium text-gray-600 mb-1">OG画像URL（ランク別）</span>
             <div className="space-y-2">
-              {ranks.map((r) => (
-                <div key={r.rank || Math.random()} className="flex items-center gap-2">
+              {ranks.map((r, i) => (
+                <div key={r.rank || `__rank_${i}`} className="flex items-center gap-2">
                   <span className="w-12 shrink-0 text-xs font-medium text-gray-500">{r.rank || '—'}</span>
                   <input
                     type="url"

@@ -267,10 +267,11 @@ export const api = {
   // ===== Diagnosis =====
   getDiagnosis: (slug: string) =>
     get<DiagnosisDefinitionForLiff>(`/api/liff/diagnoses/${encodeURIComponent(slug)}`),
-  submitDiagnosis: (slug: string, answers: Record<string, number>) =>
+  // requestId は再送冪等キー(同じ値の再送は二重保存・二重副作用を防ぐ)。
+  submitDiagnosis: (slug: string, answers: Record<string, number>, requestId?: string) =>
     post<DiagnosisSubmissionResponse>(
       `/api/liff/diagnoses/${encodeURIComponent(slug)}/submissions`,
-      { answers },
+      { answers, requestId },
     ),
   getDiagnosisSubmission: (sid: string) =>
     get<DiagnosisSubmissionResponse>(`/api/liff/diagnoses/submissions/${encodeURIComponent(sid)}`),

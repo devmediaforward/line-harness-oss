@@ -19,6 +19,7 @@ import {
   countDiagnosisSubmissions,
   getDiagnosisSubmissionById,
   getDiagnosisSubmissionByShareToken,
+  getDiagnosisSubmissionByRequestId,
   createDiagnosisSubmission,
   getFriendByLineUserId,
   getLineAccountById,
@@ -126,11 +127,27 @@ function resolveShareBaseUrl(c: Context<Env>): string {
   return base.replace(/\/$/, '');
 }
 
-/** definition.share.liffUrl から liffId を抜き、結果ページ LIFF URL を組む。 */
-function buildLiffResultUrl(shareLiffUrl: string, submissionId: string): string {
-  const m = shareLiffUrl.match(/liff\.line\.me\/([^/?#]+)/);
-  const liffId = m ? m[1] : '';
-  return `https://liff.line.me/${liffId}/diagnosis/result/${submissionId}`;
+/** definition.share.liffUrl から liffId を抜き、結果ページ LIFF URL を組む。
+ *  liffId が抽出できない(空文字・liff.line.me/{liffId} 形式でない)なら null を返し、
+ *  呼び出し側は壊れた URL のメッセージ送信をスキップする。 */
+function buildLiffResultUrl(shareLiffUrl: string, submissionId: string): string | null {
+  // 先頭が https://liff.line.me/{liffId} の形のときだけ liffId を採る(validate.ts と統一)。
+  const m = shareLiffUrl.match(/^https:\/\/liff\.line\.me\/([^/?#]+)/);
+  if (!m || !m[1]) return null;
+  return `https://liff.line.me/${m[1]}/diagnosis/result/${submissionId}`;
+}
+
+/** D1 の UNIQUE 制約違反かどうか(並行 INSERT の検出用)。 */
+function isUniqueViolation(e: unknown): boolean {
+  const msg = e instanceof Error ? e.message : String(e);
+  return /UNIQUE constraint failed/i.test(msg);
+}
+
+/** 保存済み submission を副作用なしでそのまま返す(冪等再送・並行 INSERT 用)。 */
+function savedSubmissionResponse(c: Context<Env>, sub: DiagnosisSubmission) {
+  const result = safeParse<Record<string, unknown>>(sub.result, {});
+  const shareUrl = sub.share_token ? `${resolveShareBaseUrl(c)}/d/${sub.share_token}` : '';
+  return c.json({ submissionId: sub.id, result, shareUrl });
 }
 
 // ── 公開シェアページ (07_share-og.md / 決定 D4・D7) ─────────────────────────────
@@ -365,17 +382,6 @@ function computeStats(def: DiagnosisDefinition, resultStrings: string[]) {
 // forms の副作用実装を流用。失敗しても submission は成功扱い(各処理を try-catch で
 // 握りつぶす)。ログ出力はしない(空 catch)。
 
-/** タグ名 → tag_id 解決(既存名マッチ、無ければ自動作成)。 */
-async function resolveTagIdByName(db: D1Database, name: string): Promise<string> {
-  const existing = await db
-    .prepare(`SELECT id FROM tags WHERE name = ? LIMIT 1`)
-    .bind(name)
-    .first<{ id: string }>();
-  if (existing) return existing.id;
-  const created = await createTag(db, { name });
-  return created.id;
-}
-
 async function applyDiagnosisSideEffects(
   c: Context<Env>,
   definition: DiagnosisDefinition,
@@ -388,38 +394,66 @@ async function applyDiagnosisSideEffects(
   if (!se || !friend) return;
   const db = c.env.DB;
 
-  // 結果メッセージ(Flex)を本人に push
+  // 結果メッセージ(Flex)を本人に push。liffId が抽出できない liffUrl のときは
+  // 壊れた結果ボタンを送らないよう push 自体をスキップする(他の副作用は継続)。
   if (se.sendResultMessage && friend.line_user_id) {
     try {
       const liffResultUrl = buildLiffResultUrl(definition.share?.liffUrl ?? '', submissionId);
-      const flex = buildResultFlex({
-        result,
-        diagnosisName: definition.meta?.name ?? '',
-        liffResultUrl,
-        shareUrl,
-      });
-      const { LineClient } = await import('@line-crm/line-sdk');
-      let accessToken = c.env.LINE_CHANNEL_ACCESS_TOKEN;
-      if (friend.line_account_id) {
-        const account = await getLineAccountById(db, friend.line_account_id);
-        if (account) accessToken = account.channel_access_token;
+      if (liffResultUrl) {
+        const flex = buildResultFlex({
+          result,
+          diagnosisName: definition.meta?.name ?? '',
+          liffResultUrl,
+          shareUrl,
+        });
+        const { LineClient } = await import('@line-crm/line-sdk');
+        let accessToken = c.env.LINE_CHANNEL_ACCESS_TOKEN;
+        if (friend.line_account_id) {
+          const account = await getLineAccountById(db, friend.line_account_id);
+          if (account) accessToken = account.channel_access_token;
+        }
+        const lineClient = new LineClient(accessToken);
+        await lineClient.pushMessage(friend.line_user_id, [flex]);
       }
-      const lineClient = new LineClient(accessToken);
-      await lineClient.pushMessage(friend.line_user_id, [flex]);
     } catch {
       /* 副作用失敗は submission を失敗にしない */
     }
   }
 
-  // 悩みタグを friend タグとして付与(タグ自動作成 or 既存名マッチ)
-  if (se.addTags) {
+  // 悩みタグを friend タグとして付与。タグ名を一括 SELECT(N+1 回避)→ 不足分のみ作成 → 付与。
+  // 各タグは独立に処理し、1個の失敗(並行作成の UNIQUE 違反など)で他タグの付与は止めない。
+  if (se.addTags && result.tags.length > 0) {
+    const names = [...new Set(result.tags.map((t) => t.tag))];
+    const idByName = new Map<string, string>();
     try {
-      for (const t of result.tags) {
-        const tagId = await resolveTagIdByName(db, t.tag);
-        if (tagId) await addTagToFriend(db, friend.id, tagId);
-      }
+      const placeholders = names.map(() => '?').join(', ');
+      const existing = await db
+        .prepare(`SELECT id, name FROM tags WHERE name IN (${placeholders})`)
+        .bind(...names)
+        .all<{ id: string; name: string }>();
+      for (const r of existing.results ?? []) idByName.set(r.name, r.id);
     } catch {
-      /* 副作用失敗は submission を失敗にしない */
+      /* 一括 SELECT 失敗は握りつぶす(各タグを個別に作成/引き直す) */
+    }
+    for (const name of names) {
+      try {
+        let tagId = idByName.get(name);
+        if (!tagId) {
+          try {
+            tagId = (await createTag(db, { name })).id;
+          } catch {
+            // 並行作成で UNIQUE 違反 → 既存を引き直して続行。引けなければこのタグはスキップ。
+            const row = await db
+              .prepare(`SELECT id FROM tags WHERE name = ? LIMIT 1`)
+              .bind(name)
+              .first<{ id: string }>();
+            tagId = row?.id;
+          }
+        }
+        if (tagId) await addTagToFriend(db, friend.id, tagId);
+      } catch {
+        /* このタグだけスキップし、残りのタグ処理は継続 */
+      }
     }
   }
 
@@ -699,8 +733,34 @@ diagnoses.post('/api/liff/diagnoses/:slug/submissions', async (c) => {
     const definition = safeParse<DiagnosisDefinition | null>(diag.definition, null);
     if (!definition) return c.json({ error: 'invalid_definition' }, 500);
 
-    const body = await c.req.json<{ answers?: DiagnosisAnswers }>().catch(() => ({}) as { answers?: DiagnosisAnswers });
+    const body = await c.req
+      .json<{ answers?: DiagnosisAnswers; requestId?: unknown }>()
+      .catch(() => ({}) as { answers?: DiagnosisAnswers; requestId?: unknown });
     const answers = body.answers ?? {};
+
+    // requestId: キー無し → 従来動作(冪等キーなし)。存在するが不正な値(空文字・
+    // 65文字以上・非文字列)は 400(冪等性が静かに無効化されるのを防ぐ)。
+    let requestId: string | null = null;
+    if (body.requestId !== undefined) {
+      if (
+        typeof body.requestId !== 'string' ||
+        body.requestId.length === 0 ||
+        body.requestId.length > 64
+      ) {
+        return c.json({ error: 'invalid_request_id' }, 400);
+      }
+      requestId = body.requestId;
+    }
+
+    // 冪等: requestId 既存なら採点・保存・副作用を行わず保存済み結果を返す(再送対策)。
+    // 本人不一致は 409(他人の requestId 再利用を弾く)。
+    if (requestId) {
+      const existing = await getDiagnosisSubmissionByRequestId(c.env.DB, diag.id, requestId);
+      if (existing) {
+        if (existing.line_user_id !== callerLineUserId) return c.json({ error: 'conflict' }, 409);
+        return savedSubmissionResponse(c, existing);
+      }
+    }
 
     let result: DiagnosisResult;
     try {
@@ -711,15 +771,29 @@ diagnoses.post('/api/liff/diagnoses/:slug/submissions', async (c) => {
 
     const friend = await getFriendByLineUserId(c.env.DB, callerLineUserId);
     const shareToken = crypto.randomUUID();
-    const submission = await createDiagnosisSubmission(c.env.DB, {
-      diagnosisId: diag.id,
-      friendId: friend?.id ?? null,
-      lineUserId: callerLineUserId,
-      definitionVersion: diag.definition_version,
-      answers: JSON.stringify(answers),
-      result: JSON.stringify(result),
-      shareToken,
-    });
+    let submission: DiagnosisSubmission;
+    try {
+      submission = await createDiagnosisSubmission(c.env.DB, {
+        diagnosisId: diag.id,
+        friendId: friend?.id ?? null,
+        lineUserId: callerLineUserId,
+        definitionVersion: diag.definition_version,
+        answers: JSON.stringify(answers),
+        result: JSON.stringify(result),
+        shareToken,
+        requestId,
+      });
+    } catch (e) {
+      // 並行リクエストで UNIQUE(request_id) 違反 → 既存を引き直して副作用なしで返す。
+      if (requestId && isUniqueViolation(e)) {
+        const existing = await getDiagnosisSubmissionByRequestId(c.env.DB, diag.id, requestId);
+        if (existing) {
+          if (existing.line_user_id !== callerLineUserId) return c.json({ error: 'conflict' }, 409);
+          return savedSubmissionResponse(c, existing);
+        }
+      }
+      throw e;
+    }
 
     const shareUrl = `${resolveShareBaseUrl(c)}/d/${shareToken}`;
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import type { DiagnosisResult } from '@line-crm/shared'
 import { api } from '@/lib/api'
 import type { DiagnosisDetail } from '@/lib/api'
@@ -37,6 +37,18 @@ export default function AdvancedTab({
   const [previewResult, setPreviewResult] = useState<DiagnosisResult | null>(null)
   const [previewError, setPreviewError] = useState('')
   const [previewing, setPreviewing] = useState(false)
+
+  // JSON 保存で definition が変わると definitionVersion が上がる。テスト実行の回答セットは
+  // 旧設問 id のまま残るため、バージョン変化を検知して新しい definition.questions から作り直す。
+  const lastVersionRef = useRef(detail.definitionVersion)
+  useEffect(() => {
+    if (lastVersionRef.current === detail.definitionVersion) return
+    lastVersionRef.current = detail.definitionVersion
+    const nextMin = detail.definition.answerScale?.min ?? 1
+    const rebuilt: Record<string, number> = {}
+    for (const q of detail.definition.questions ?? []) rebuilt[q.id] = nextMin
+    setAnswers(rebuilt)
+  }, [detail.definitionVersion, detail.definition])
 
   const onEdit = (v: string) => {
     setJsonText(v)

@@ -79,16 +79,22 @@ npx wrangler d1 create line-harness
 
 ### R2 バケット（×1 または ×2）
 
-Worker は画像などを R2 の `IMAGES` バインディング（バケット名 `line-harness-images`）で扱います。
+Worker は画像などを R2 の `IMAGES` バインディング（既定のバケット名 `line-harness-images`）で扱います。dev/prod での分離は、Environment 変数 `R2_BUCKET_NAME` で切り替えられます（**推奨**）。
 
-- **おすすめ（シンプル）: 1バケット共用**
+- **（推奨）dev/prod で分離する: 2バケット + `R2_BUCKET_NAME`**
+  dev 用と prod 用に別バケットを作り（例 `line-harness-images-dev` / `line-harness-images`）、各 Environment の Variable に `R2_BUCKET_NAME` を設定します。デプロイワークフローはこの値が設定されていれば、デプロイ設定の `bucket_name` を環境ごとに差し替えます。`apps/worker/wrangler.toml` のソース改修は不要です。
+  ```bash
+  # dev 用
+  npx wrangler r2 bucket create line-harness-images-dev
+  # prod 用
+  npx wrangler r2 bucket create line-harness-images
+  ```
+
+- **（シンプル）1バケット共用**
   ```bash
   npx wrangler r2 bucket create line-harness-images
   ```
-  デプロイワークフローは R2 バケット名を書き換えないため、dev/prod は既定でこの同じバケットを使います。画像キーは UUID を含むので取り違えは起きにくく、まずはこの構成で十分です。
-
-- **（任意・上級）dev/prod で完全分離したい場合: 2バケット**
-  dev 用に別バケット（例 `line-harness-images-dev`）を作り、`apps/worker/wrangler.toml` の `bucket_name` を環境ごとに変える改修が必要です。現状のワークフローはバケット名を環境変数で差し替えないため、ソース側の対応が前提になります。まずは 1バケット共用で始めることを推奨します。
+  `R2_BUCKET_NAME` を設定しなければ、ワークフローはバケット名を書き換えず、dev/prod は `wrangler.toml` の既定バケットを共用します。画像キーは UUID を含むので取り違えは起きにくく、まず動かす分にはこの構成でも十分です。
 
 ### Cloudflare Pages（×2：管理画面 dev と prod）
 
@@ -136,6 +142,7 @@ npx wrangler pages project create line-harness-admin --production-branch main
 | `VITE_BOT_BASIC_ID` | LINE bot basic ID（`@` 付き） | （dev の bot） | （prod の bot） |
 | `ADMIN_ORIGIN` | 管理画面のオリジン（CORS 用） | `https://line-harness-admin-dev.pages.dev` | `https://line-harness-admin.pages.dev` |
 | `WORKER_URL` | Worker の公開 URL（共有ページの base、デプロイ設定への反映に使用） | `https://line-harness-dev.<subdomain>.workers.dev` | `https://line-harness.<subdomain>.workers.dev` |
+| `R2_BUCKET_NAME` | （任意）R2 バケットを dev/prod で分離する場合のバケット名。未設定なら `wrangler.toml` の既定（`line-harness-images`）を共用 | `line-harness-images-dev` | `line-harness-images` |
 | `VITE_CALENDAR_CONNECTION_ID` | （任意）Google カレンダー連携を使う場合のみ | （必要なら設定） | （必要なら設定） |
 | `ADMIN_ALLOW_CROSS_SITE` | （任意）管理画面と API が別オリジンのときの cookie 設定。未設定なら `true` 扱い | `true` | `true` |
 

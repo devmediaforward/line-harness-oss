@@ -24,12 +24,38 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 export default function StatsTab({
   stats,
   definition,
+  loading = false,
+  error = '',
+  onReload,
 }: {
   stats: DiagnosisStats | null
   definition: DiagnosisDefinition
+  loading?: boolean
+  error?: string
+  onReload?: () => void
 }) {
+  // 初回取得の失敗でも復旧できるよう、stats が無いときも再読み込みボタンを出す。
   if (!stats) {
-    return <div className="text-sm text-gray-400">統計を読み込み中...</div>
+    return (
+      <div className="space-y-3">
+        {loading ? (
+          <div className="text-sm text-gray-400">統計を読み込み中...</div>
+        ) : (
+          <div className={`text-sm ${error ? 'text-rose-600' : 'text-gray-400'}`}>
+            {error || '統計はまだ読み込まれていません'}
+          </div>
+        )}
+        {!loading && (
+          <button
+            onClick={onReload}
+            disabled={!onReload}
+            className="px-3 py-1.5 text-xs rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-40"
+          >
+            再読み込み
+          </button>
+        )}
+      </div>
+    )
   }
 
   const ranks = definition.scoring?.ranks ?? []
@@ -44,6 +70,16 @@ export default function StatsTab({
 
   return (
     <div className="space-y-5">
+      <div className="flex items-center justify-end">
+        <button
+          onClick={onReload}
+          disabled={loading || !onReload}
+          className="px-3 py-1.5 text-xs rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-40"
+        >
+          {loading ? '読み込み中...' : '再読み込み'}
+        </button>
+      </div>
+
       <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
         回答が50件程度たまったら、この分布を見てランク区切りを調整してください。
       </div>

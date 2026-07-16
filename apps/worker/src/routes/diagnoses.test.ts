@@ -15,6 +15,7 @@ const dbMocks = {
   countDiagnosisSubmissions: vi.fn(),
   getDiagnosisSubmissionById: vi.fn(),
   getDiagnosisSubmissionByShareToken: vi.fn(),
+  getDiagnosisSubmissionByRequestId: vi.fn(),
   createDiagnosisSubmission: vi.fn(),
   getFriendByLineUserId: vi.fn(),
   getLineAccountById: vi.fn(),
@@ -88,20 +89,25 @@ const executionCtx = {
 interface DbState {
   lastSubmitted?: Array<{ diagnosis_id: string; last_submitted_at: string | null }>;
   statsResults?: Array<{ result: string }>;
-  tagRow?: { id: string } | null;
+  /** 設定時、一括タグ SELECT が問い合わせた全タグ名をこの id にマップして返す(既存タグ扱い)。 */
+  tagExistsId?: string;
+  /** 設定時、名前単体 SELECT(createTag 失敗後の引き直し)がこの id を返す。 */
+  tagReselectId?: string;
 }
 
 /** ルートが直接叩く raw クエリだけを担う最小 D1 モック。 */
 function makeDb(state: DbState = {}): D1Database {
   return {
     prepare(sql: string) {
+      let boundParams: unknown[] = [];
       const stmt = {
-        bind() {
+        bind(...params: unknown[]) {
+          boundParams = params;
           return stmt;
         },
         async first<T>() {
           if (sql.includes('SELECT id FROM tags WHERE name')) {
-            return (state.tagRow ?? null) as T | null;
+            return (state.tagReselectId ? { id: state.tagReselectId } : null) as T | null;
           }
           return null as T | null;
         },
@@ -111,6 +117,12 @@ function makeDb(state: DbState = {}): D1Database {
           }
           if (sql.includes('SELECT result FROM diagnosis_submissions')) {
             return { results: (state.statsResults ?? []) as T[] };
+          }
+          if (sql.includes('SELECT id, name FROM tags WHERE name IN')) {
+            const rows = state.tagExistsId
+              ? boundParams.map((name) => ({ id: state.tagExistsId, name }))
+              : [];
+            return { results: rows as T[] };
           }
           return { results: [] as T[] };
         },
@@ -161,6 +173,7 @@ beforeEach(() => {
   dbMocks.countDiagnosisSubmissions.mockResolvedValue(0);
   dbMocks.getDiagnosisSubmissionById.mockResolvedValue(null);
   dbMocks.getDiagnosisSubmissionByShareToken.mockResolvedValue(null);
+  dbMocks.getDiagnosisSubmissionByRequestId.mockResolvedValue(null);
   dbMocks.createDiagnosisSubmission.mockResolvedValue({
     id: 'sub-1',
     diagnosis_id: 'diag-1',
@@ -170,6 +183,7 @@ beforeEach(() => {
     answers: '{}',
     result: '{}',
     share_token: 'share-tok',
+    request_id: null,
     created_at: '2026-07-16T00:00:00+09:00',
   });
   dbMocks.getFriendByLineUserId.mockResolvedValue(null);
@@ -576,7 +590,7 @@ describe('POST submissions 副作用フレーム (addTags / enrollScenarioId)', 
     const res = await req('POST', '/api/liff/diagnoses/redent-cleanliness/submissions', {
       auth: 'idtoken',
       body: { answers: answersWith({ T1: 5 }) }, // 顔(ヒゲ) タグを立てる
-      dbState: { tagRow: { id: 'tag-existing' } },
+      dbState: { tagExistsId: 'tag-existing' },
     });
     expect(res.status).toBe(200);
     expect(dbMocks.addTagToFriend).toHaveBeenCalledWith(expect.anything(), 'friend-1', 'tag-existing');
@@ -591,7 +605,7 @@ describe('POST submissions 副作用フレーム (addTags / enrollScenarioId)', 
     const res = await req('POST', '/api/liff/diagnoses/redent-cleanliness/submissions', {
       auth: 'idtoken',
       body: { answers: answersWith({ T1: 5 }) },
-      dbState: { tagRow: null },
+      dbState: {}, // 既存タグなし → createTag で自動作成
     });
     expect(res.status).toBe(200);
     expect(dbMocks.createTag).toHaveBeenCalled();
@@ -608,6 +622,187 @@ describe('POST submissions 副作用フレーム (addTags / enrollScenarioId)', 
     });
     expect(res.status).toBe(200);
     expect(dbMocks.enrollFriendInScenario).toHaveBeenCalledWith(expect.anything(), 'friend-1', 'scenario-9');
+  });
+
+  test('addTags: createTag が UNIQUE 違反 → 名前で引き直して付与(並行作成の吸収)', async () => {
+    liffAuthMocks.verifyCallerLineUserId.mockResolvedValue('U_alice');
+    dbMocks.getDiagnosisBySlug.mockResolvedValue(makeDiagRow({ definition: defWith({ addTags: true }) }));
+    dbMocks.getFriendByLineUserId.mockResolvedValue(makeFriend());
+    dbMocks.createTag.mockRejectedValue(new Error('D1_ERROR: UNIQUE constraint failed: tags.name'));
+    const res = await req('POST', '/api/liff/diagnoses/redent-cleanliness/submissions', {
+      auth: 'idtoken',
+      body: { answers: answersWith({ T1: 5 }) }, // 悩みタグを立てる
+      dbState: { tagReselectId: 'tag-reselected' }, // 一括 SELECT は空、引き直しで見つかる
+    });
+    expect(res.status).toBe(200);
+    expect(dbMocks.addTagToFriend).toHaveBeenCalledWith(expect.anything(), 'friend-1', 'tag-reselected');
+  });
+
+  test('addTags: createTag も引き直しも失敗ならそのタグをスキップし submission は 200', async () => {
+    liffAuthMocks.verifyCallerLineUserId.mockResolvedValue('U_alice');
+    dbMocks.getDiagnosisBySlug.mockResolvedValue(makeDiagRow({ definition: defWith({ addTags: true }) }));
+    dbMocks.getFriendByLineUserId.mockResolvedValue(makeFriend());
+    dbMocks.createTag.mockRejectedValue(new Error('D1_ERROR: UNIQUE constraint failed: tags.name'));
+    const res = await req('POST', '/api/liff/diagnoses/redent-cleanliness/submissions', {
+      auth: 'idtoken',
+      body: { answers: answersWith({ T1: 5 }) },
+      dbState: {}, // 一括 SELECT も引き直しも空 → 付与できないがクラッシュしない
+    });
+    expect(res.status).toBe(200);
+    expect(dbMocks.addTagToFriend).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST submissions 冪等化 (requestId)', () => {
+  function makeExistingSub(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'sub-existing',
+      diagnosis_id: 'diag-1',
+      friend_id: 'friend-1',
+      line_user_id: 'U_alice',
+      definition_version: 3,
+      answers: '{}',
+      result: JSON.stringify({ rank: 'S', totalScore: 100 }),
+      share_token: 'tok-existing',
+      request_id: 'req-1',
+      created_at: '2026-07-16T00:00:00+09:00',
+      ...overrides,
+    };
+  }
+
+  test('同一 requestId の2回目は採点・保存・push をせず同じ submissionId を返す', async () => {
+    liffAuthMocks.verifyCallerLineUserId.mockResolvedValue('U_alice');
+    dbMocks.getDiagnosisBySlug.mockResolvedValue(makeDiagRow());
+    dbMocks.getFriendByLineUserId.mockResolvedValue(makeFriend());
+
+    // 1回目: requestId 既存なし → 通常保存 + push
+    dbMocks.getDiagnosisSubmissionByRequestId.mockResolvedValueOnce(null);
+    const res1 = await req('POST', '/api/liff/diagnoses/redent-cleanliness/submissions', {
+      auth: 'idtoken',
+      body: { answers: answersWith(), requestId: 'req-1' },
+    });
+    expect(res1.status).toBe(200);
+    const j1 = (await res1.json()) as { submissionId: string };
+    expect(dbMocks.createDiagnosisSubmission).toHaveBeenCalledTimes(1);
+    expect(dbMocks.createDiagnosisSubmission).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ requestId: 'req-1' }),
+    );
+    expect(lineMocks.pushMessage).toHaveBeenCalledTimes(1);
+
+    // 2回目: 同じ requestId → 既存を返す(採点・保存・push なし)
+    dbMocks.getDiagnosisSubmissionByRequestId.mockResolvedValueOnce(makeExistingSub({ id: j1.submissionId }));
+    const res2 = await req('POST', '/api/liff/diagnoses/redent-cleanliness/submissions', {
+      auth: 'idtoken',
+      body: { answers: answersWith(), requestId: 'req-1' },
+    });
+    expect(res2.status).toBe(200);
+    const j2 = (await res2.json()) as { submissionId: string; shareUrl: string };
+    expect(j2.submissionId).toBe(j1.submissionId);
+    expect(j2.shareUrl).toBe('https://worker.example.com/d/tok-existing');
+    expect(dbMocks.createDiagnosisSubmission).toHaveBeenCalledTimes(1); // 増えない
+    expect(lineMocks.pushMessage).toHaveBeenCalledTimes(1); // 増えない
+  });
+
+  test('別人の requestId 再利用は 409(保存・push なし)', async () => {
+    liffAuthMocks.verifyCallerLineUserId.mockResolvedValue('U_bob');
+    dbMocks.getDiagnosisBySlug.mockResolvedValue(makeDiagRow());
+    dbMocks.getFriendByLineUserId.mockResolvedValue(makeFriend());
+    dbMocks.getDiagnosisSubmissionByRequestId.mockResolvedValue(makeExistingSub({ line_user_id: 'U_alice' }));
+    const res = await req('POST', '/api/liff/diagnoses/redent-cleanliness/submissions', {
+      auth: 'idtoken',
+      body: { answers: answersWith(), requestId: 'req-1' },
+    });
+    expect(res.status).toBe(409);
+    expect(dbMocks.createDiagnosisSubmission).not.toHaveBeenCalled();
+    expect(lineMocks.pushMessage).not.toHaveBeenCalled();
+  });
+
+  test('requestId 無しの旧クライアントは冪等チェックせず従来動作', async () => {
+    liffAuthMocks.verifyCallerLineUserId.mockResolvedValue('U_alice');
+    dbMocks.getDiagnosisBySlug.mockResolvedValue(makeDiagRow());
+    dbMocks.getFriendByLineUserId.mockResolvedValue(makeFriend());
+    const res = await req('POST', '/api/liff/diagnoses/redent-cleanliness/submissions', {
+      auth: 'idtoken',
+      body: { answers: answersWith() },
+    });
+    expect(res.status).toBe(200);
+    expect(dbMocks.getDiagnosisSubmissionByRequestId).not.toHaveBeenCalled();
+    expect(dbMocks.createDiagnosisSubmission).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ requestId: null }),
+    );
+  });
+
+  test.each([
+    ['空文字', ''],
+    ['65文字超', 'x'.repeat(65)],
+    ['非文字列(数値)', 12345],
+    ['非文字列(オブジェクト)', { a: 1 }],
+  ])('requestId が存在するが不正(%s)は 400(保存・冪等チェックなし)', async (_label, bad) => {
+    liffAuthMocks.verifyCallerLineUserId.mockResolvedValue('U_alice');
+    dbMocks.getDiagnosisBySlug.mockResolvedValue(makeDiagRow());
+    dbMocks.getFriendByLineUserId.mockResolvedValue(makeFriend());
+    const res = await req('POST', '/api/liff/diagnoses/redent-cleanliness/submissions', {
+      auth: 'idtoken',
+      body: { answers: answersWith(), requestId: bad },
+    });
+    expect(res.status).toBe(400);
+    expect(dbMocks.getDiagnosisSubmissionByRequestId).not.toHaveBeenCalled();
+    expect(dbMocks.createDiagnosisSubmission).not.toHaveBeenCalled();
+    expect(lineMocks.pushMessage).not.toHaveBeenCalled();
+  });
+
+  test('64文字ちょうどの requestId は受理される(境界)', async () => {
+    liffAuthMocks.verifyCallerLineUserId.mockResolvedValue('U_alice');
+    dbMocks.getDiagnosisBySlug.mockResolvedValue(makeDiagRow());
+    dbMocks.getFriendByLineUserId.mockResolvedValue(makeFriend());
+    const id64 = 'a'.repeat(64);
+    const res = await req('POST', '/api/liff/diagnoses/redent-cleanliness/submissions', {
+      auth: 'idtoken',
+      body: { answers: answersWith(), requestId: id64 },
+    });
+    expect(res.status).toBe(200);
+    expect(dbMocks.createDiagnosisSubmission).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ requestId: id64 }),
+    );
+  });
+
+  test('並行 INSERT が UNIQUE 違反 → 既存を引き直して副作用なしで返す', async () => {
+    liffAuthMocks.verifyCallerLineUserId.mockResolvedValue('U_alice');
+    dbMocks.getDiagnosisBySlug.mockResolvedValue(makeDiagRow());
+    dbMocks.getFriendByLineUserId.mockResolvedValue(makeFriend());
+    // pre-check では未存在 → INSERT で並行の UNIQUE 違反 → 再取得で既存が見つかる
+    dbMocks.getDiagnosisSubmissionByRequestId
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(makeExistingSub({ id: 'sub-race' }));
+    dbMocks.createDiagnosisSubmission.mockRejectedValueOnce(
+      new Error('D1_ERROR: UNIQUE constraint failed: diagnosis_submissions.request_id'),
+    );
+    const res = await req('POST', '/api/liff/diagnoses/redent-cleanliness/submissions', {
+      auth: 'idtoken',
+      body: { answers: answersWith(), requestId: 'req-1' },
+    });
+    expect(res.status).toBe(200);
+    const j = (await res.json()) as { submissionId: string };
+    expect(j.submissionId).toBe('sub-race');
+    expect(lineMocks.pushMessage).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST submissions: 壊れた liffUrl での結果 push スキップ (fix4)', () => {
+  test('sendResultMessage=true でも liffUrl から liffId 抽出不可なら push しない', async () => {
+    liffAuthMocks.verifyCallerLineUserId.mockResolvedValue('U_alice');
+    const brokenDef = { ...redentDef, share: { ...redentDef.share, liffUrl: '' } };
+    dbMocks.getDiagnosisBySlug.mockResolvedValue(makeDiagRow({ definition: JSON.stringify(brokenDef) }));
+    dbMocks.getFriendByLineUserId.mockResolvedValue(makeFriend());
+    const res = await req('POST', '/api/liff/diagnoses/redent-cleanliness/submissions', {
+      auth: 'idtoken',
+      body: { answers: answersWith() },
+    });
+    expect(res.status).toBe(200);
+    expect(lineMocks.pushMessage).not.toHaveBeenCalled();
   });
 });
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { api } from '@/lib/api'
@@ -25,11 +25,17 @@ export default function DiagnosisDetailClient({ diagnosisId }: { diagnosisId: st
   const router = useRouter()
   const [detail, setDetail] = useState<DiagnosisDetail | null>(null)
   const [stats, setStats] = useState<DiagnosisStats | null>(null)
+  const [statsLoading, setStatsLoading] = useState(false)
+  const [statsError, setStatsError] = useState('')
   const [scenarios, setScenarios] = useState<{ id: string; name: string }[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [activeTab, setActiveTab] = useState<TabKey>('stats')
   const [deleting, setDeleting] = useState(false)
+  // 統計は初回に統計タブがアクティブになった時のみ取得(保存やタブ切替では再取得しない)。
+  const statsRequestedRef = useRef(false)
+  // 診断切替後に旧リクエストの遅延応答が届いても無視するための世代カウンタ。
+  const statsGenRef = useRef(0)
 
   useEffect(() => {
     let cancelled = false
@@ -37,13 +43,11 @@ export default function DiagnosisDetailClient({ diagnosisId }: { diagnosisId: st
     setError('')
     Promise.all([
       api.diagnoses.get(diagnosisId).catch(() => null),
-      api.diagnoses.stats(diagnosisId).catch(() => null),
       api.scenarios.list().catch(() => null),
-    ]).then(([detailRes, statsRes, scenRes]) => {
+    ]).then(([detailRes, scenRes]) => {
       if (cancelled) return
       if (detailRes && detailRes.success) setDetail(detailRes.data)
       else setError('診断の読み込みに失敗しました')
-      if (statsRes && statsRes.success) setStats(statsRes.data)
       if (scenRes && scenRes.success) setScenarios(scenRes.data.map((s) => ({ id: s.id, name: s.name })))
       setLoading(false)
     })
@@ -52,22 +56,47 @@ export default function DiagnosisDetailClient({ diagnosisId }: { diagnosisId: st
     }
   }, [diagnosisId])
 
-  const refreshStats = useCallback(() => {
+  // 診断が切り替わったら統計を破棄し、次にタブがアクティブになった時に再取得させる。
+  // 世代カウンタを進め、旧診断向けリクエストの遅延応答が届いても上書きさせない。
+  useEffect(() => {
+    statsGenRef.current += 1
+    statsRequestedRef.current = false
+    setStats(null)
+    setStatsError('')
+  }, [diagnosisId])
+
+  const loadStats = useCallback(() => {
+    const gen = statsGenRef.current
+    setStatsLoading(true)
+    setStatsError('')
     api.diagnoses
       .stats(diagnosisId)
       .then((r) => {
+        if (gen !== statsGenRef.current) return
         if (r.success) setStats(r.data)
+        else setStatsError('統計の読み込みに失敗しました')
       })
-      .catch(() => {})
+      .catch(() => {
+        if (gen !== statsGenRef.current) return
+        setStatsError('統計の読み込みに失敗しました')
+      })
+      .finally(() => {
+        if (gen !== statsGenRef.current) return
+        setStatsLoading(false)
+      })
   }, [diagnosisId])
 
-  const handleSaved = useCallback(
-    (updated: DiagnosisDetail) => {
-      setDetail(updated)
-      refreshStats()
-    },
-    [refreshStats],
-  )
+  // 統計タブが初めてアクティブになった時に一度だけ取得。以降は「再読み込み」ボタンで明示更新。
+  useEffect(() => {
+    if (activeTab === 'stats' && !statsRequestedRef.current) {
+      statsRequestedRef.current = true
+      loadStats()
+    }
+  }, [activeTab, loadStats])
+
+  const handleSaved = useCallback((updated: DiagnosisDetail) => {
+    setDetail(updated)
+  }, [])
 
   const handleDelete = async () => {
     if (!confirm('この診断を削除しますか？回答もすべて削除されます。')) return
@@ -152,7 +181,15 @@ export default function DiagnosisDetailClient({ diagnosisId }: { diagnosisId: st
         </nav>
       </div>
 
-      {activeTab === 'stats' && <StatsTab stats={stats} definition={detail.definition} />}
+      {activeTab === 'stats' && (
+        <StatsTab
+          stats={stats}
+          definition={detail.definition}
+          loading={statsLoading}
+          error={statsError}
+          onReload={loadStats}
+        />
+      )}
       {activeTab === 'basic' && <BasicSettingsTab detail={detail} scenarios={scenarios} onSaved={handleSaved} />}
       {activeTab === 'questions' && <QuestionsTab detail={detail} onSaved={handleSaved} />}
       {activeTab === 'advanced' && <AdvancedTab detail={detail} onSaved={handleSaved} />}

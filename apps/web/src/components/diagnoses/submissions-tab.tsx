@@ -26,7 +26,10 @@ function shareUrlOf(token: string | null): string | null {
 
 function csvCell(v: string | number | null): string {
   const s = v === null || v === undefined ? '' : String(v)
-  return `"${s.replace(/"/g, '""')}"`
+  // 数式インジェクション対策: = + - @ / タブ / CR で始まる値は先頭に ' を付けて無害化してから、
+  // 既存の CSV エスケープ(ダブルクオートで囲み、内部の " を "" へ)を適用する。
+  const guarded = /^[=+\-@\t\r]/.test(s) ? `'${s}` : s
+  return `"${guarded.replace(/"/g, '""')}"`
 }
 
 export default function SubmissionsTab({

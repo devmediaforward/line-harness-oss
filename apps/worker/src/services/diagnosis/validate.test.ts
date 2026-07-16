@@ -311,6 +311,46 @@ describe('validateDefinition — F1〜F6 追加検査', () => {
     expect(errors.some((e: string) => e.includes('questions は空にできません'))).toBe(true);
   });
 
+  it('相関: sendResultMessage=true + liffUrl 空文字 → エラー', () => {
+    const def = clone();
+    def.sideEffects.sendResultMessage = true;
+    def.share.liffUrl = '';
+    const errors = validateDefinition(def);
+    expect(errors.some((e: string) => e.includes('liff.line.me'))).toBe(true);
+  });
+
+  it('相関: sendResultMessage=true + liff.line.me 形式でない URL → エラー', () => {
+    const def = clone();
+    def.sideEffects.sendResultMessage = true;
+    def.share.liffUrl = 'https://example.com/diagnosis';
+    const errors = validateDefinition(def);
+    expect(errors.some((e: string) => e.includes('liff.line.me'))).toBe(true);
+  });
+
+  it('相関(先頭アンカー): liff.line.me が先頭でない URL → エラー', () => {
+    // 途中に liff.line.me を含むだけの偽装 URL は弾く(先頭アンカーのみ許可)。
+    const def = clone();
+    def.sideEffects.sendResultMessage = true;
+    def.share.liffUrl = 'https://evil.example.com/liff.line.me/ABCD/x';
+    const errors = validateDefinition(def);
+    expect(errors.some((e: string) => e.includes('liff.line.me'))).toBe(true);
+  });
+
+  it('相関: sendResultMessage=true + プレースホルダ liffUrl(REPLACE_LIFF_ID)は通る', () => {
+    // シード既定は sendResultMessage=true かつ REPLACE_LIFF_ID プレースホルダ → エラー0件のまま
+    const def = clone();
+    expect(def.sideEffects.sendResultMessage).toBe(true);
+    expect(validateDefinition(def).some((e: string) => e.includes('liff.line.me'))).toBe(false);
+  });
+
+  it('相関: sendResultMessage=false なら liffUrl 空でも liffUrl エラーは出さない', () => {
+    const def = clone();
+    def.sideEffects.sendResultMessage = false;
+    def.share.liffUrl = '';
+    const errors = validateDefinition(def);
+    expect(errors.some((e: string) => e.includes('liff.line.me'))).toBe(false);
+  });
+
   it('F4: スペース入りタグの lookup で誤った重複検出が起きない', () => {
     // keyTags ["a","b","a b"]。名前連結方式だと {a,b} と {a b} が衝突するが
     // インデックス連結では別物。重複エラーが出ないことを確認(網羅不足エラーは別途出る)。

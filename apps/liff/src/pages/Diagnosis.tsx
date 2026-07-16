@@ -21,7 +21,15 @@ export default function Diagnosis() {
   const [answers, setAnswers] = useState<Record<string, number>>({});
   const [current, setCurrent] = useState(0);
   const [submission, setSubmission] = useState<DiagnosisSubmissionResponse | null>(null);
+  // 回答フロー開始時に採番する再送冪等キー。送信失敗→再送でも同じ値を使い、
+  // レスポンス消失後のリトライで回答が二重保存されないようにする。
+  const [requestId, setRequestId] = useState<string | null>(null);
   const submittingRef = useRef(false);
+
+  function startAnswering() {
+    setRequestId(crypto.randomUUID());
+    setPhase('answering');
+  }
 
   // 定義ロード + 友だち判定（互いに独立。友だち判定は best-effort）。
   useEffect(() => {
@@ -78,7 +86,7 @@ export default function Diagnosis() {
     submittingRef.current = true;
     setPhase('submitting');
     try {
-      const res = await api.submitDiagnosis(slug, finalAnswers);
+      const res = await api.submitDiagnosis(slug, finalAnswers, requestId ?? undefined);
       setSubmission(res);
       setPhase('result');
     } catch (e) {
@@ -143,7 +151,7 @@ export default function Diagnosis() {
               <p className="text-center text-xs text-gray-500">追加後、この画面に戻ると診断をはじめられます</p>
             </div>
           ) : (
-            <button onClick={() => setPhase('answering')} className="af-primary-btn">
+            <button onClick={startAnswering} className="af-primary-btn">
               診断をはじめる
             </button>
           )}

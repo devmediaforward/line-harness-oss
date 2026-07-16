@@ -26,6 +26,7 @@ export interface DiagnosisSubmission {
   answers: string; // JSON string { questionId: value }
   result: string; // JSON string (結果スナップショット)
   share_token: string | null;
+  request_id: string | null; // クライアント生成の冪等キー(再送検出用)。旧クライアントは null
   created_at: string;
 }
 
@@ -136,6 +137,7 @@ export interface CreateDiagnosisSubmissionInput {
   answers: string; // JSON string
   result: string; // JSON string
   shareToken?: string | null;
+  requestId?: string | null; // 冪等キー。UNIQUE 制約に載る(再送は二重 INSERT を弾く)
 }
 
 export async function createDiagnosisSubmission(
@@ -151,8 +153,8 @@ export async function createDiagnosisSubmission(
     db
       .prepare(
         `INSERT INTO diagnosis_submissions
-           (id, diagnosis_id, friend_id, line_user_id, definition_version, answers, result, share_token, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (id, diagnosis_id, friend_id, line_user_id, definition_version, answers, result, share_token, request_id, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .bind(
         id,
@@ -163,6 +165,7 @@ export async function createDiagnosisSubmission(
         input.answers,
         input.result,
         input.shareToken ?? null,
+        input.requestId ?? null,
         now,
       ),
     db
@@ -193,6 +196,18 @@ export async function getDiagnosisSubmissionByShareToken(
   return db
     .prepare(`SELECT * FROM diagnosis_submissions WHERE share_token = ?`)
     .bind(shareToken)
+    .first<DiagnosisSubmission>();
+}
+
+/** 冪等キー(request_id)で既存回答を引く。診断スコープ内で照合する(再送検出用)。 */
+export async function getDiagnosisSubmissionByRequestId(
+  db: D1Database,
+  diagnosisId: string,
+  requestId: string,
+): Promise<DiagnosisSubmission | null> {
+  return db
+    .prepare(`SELECT * FROM diagnosis_submissions WHERE diagnosis_id = ? AND request_id = ?`)
+    .bind(diagnosisId, requestId)
     .first<DiagnosisSubmission>();
 }
 
