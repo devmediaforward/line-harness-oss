@@ -37,6 +37,9 @@ jobs:
         run: pnpm --filter liff build
         env:
           VITE_API_BASE: ${{ vars.VITE_API_BASE }}
+          # apps/liff は liff-auth.ts で VITE_DEFAULT_LIFF_ID を参照する(?liffId= が無い場合の既定値)。
+          # 値は VITE_LIFF_ID と同一で良いため同じ Variable から注入する。
+          VITE_DEFAULT_LIFF_ID: ${{ vars.VITE_LIFF_ID }}
           VITE_LIFF_ID: ${{ vars.VITE_LIFF_ID }}
           VITE_BOT_BASIC_ID: ${{ vars.VITE_BOT_BASIC_ID }}
 
