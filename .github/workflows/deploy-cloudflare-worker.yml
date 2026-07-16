@@ -3,7 +3,7 @@ name: Deploy Cloudflare Worker
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, develop]
     paths:
       - 'apps/worker/**'
       - 'apps/liff/**'
@@ -12,9 +12,12 @@ on:
       - 'packages/line-sdk/**'
       - '.github/workflows/deploy-cloudflare-worker.yml'
 
+concurrency: deploy-worker-${{ github.ref }}
+
 jobs:
   deploy:
     if: github.repository != 'Shudesu/line-harness-oss' && vars.LINE_HARNESS_CLOUDFLARE_DEPLOY == 'true'
+    environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'development' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -78,6 +81,10 @@ jobs:
           ADMIN_ORIGIN: ${{ vars.ADMIN_ORIGIN }}
           ADMIN_ALLOW_CROSS_SITE: ${{ vars.ADMIN_ALLOW_CROSS_SITE }}
           WORKER_URL: ${{ vars.WORKER_URL }}
+          # Optional per-environment R2 bucket. Set as an Environment Variable when
+          # you want dev/prod to use separate buckets (e.g. line-harness-images-dev
+          # vs line-harness-images). Unset = keep the wrangler.toml default (shared).
+          R2_BUCKET_NAME: ${{ vars.R2_BUCKET_NAME }}
         run: |
           test -n "$D1_DATABASE_ID"
           cd apps/worker
@@ -86,6 +93,13 @@ jobs:
             -e "s|\"database_name\":\"[^\"]*\"|\"database_name\":\"${D1_DATABASE_NAME}\"|g" \
             -e "s|\"database_id\":\"[^\"]*\"|\"database_id\":\"${D1_DATABASE_ID}\"|g" \
             dist/line_harness/wrangler.json
+          # Swap the R2 bucket name only when R2_BUCKET_NAME is set (dev/prod split).
+          if [ -n "$R2_BUCKET_NAME" ]; then
+            sed -i \
+              -e "s|\"bucket_name\":\"[^\"]*\"|\"bucket_name\":\"${R2_BUCKET_NAME}\"|g" \
+              dist/line_harness/wrangler.json
+            echo "Patched R2 bucket_name: $R2_BUCKET_NAME"
+          fi
           # Inject admin CORS vars into the deployed config when ADMIN_ORIGIN is
           # set. ADMIN_ALLOW_CROSS_SITE defaults to "true" (SameSite=None; Secure
           # cookies) since cross-origin admin/API is the case that needs it.

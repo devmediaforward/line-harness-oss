@@ -179,6 +179,41 @@ describe('validateDefinition — 構造検査(型崩れ)', () => {
     expect(errors.some((e: string) => e.includes('taxRate'))).toBe(true);
   });
 
+  it('resultPage.weakPointTexts の値が数値 → エラー', () => {
+    const def = clone();
+    def.resultPage.weakPointTexts.body = 123;
+    const errors = validateDefinition(def);
+    expect(errors.some((e: string) => e.includes('weakPointTexts'))).toBe(true);
+  });
+
+  it('resultPage.softCta.text が文字列でない → エラー', () => {
+    const def = clone();
+    def.resultPage.softCta.text = 5;
+    const errors = validateDefinition(def);
+    expect(errors.some((e: string) => e.includes('softCta'))).toBe(true);
+  });
+
+  it('resultPage.minorNotice が文字列でない → エラー', () => {
+    const def = clone();
+    def.resultPage.minorNotice = 42;
+    const errors = validateDefinition(def);
+    expect(errors.some((e: string) => e.includes('minorNotice'))).toBe(true);
+  });
+
+  it('resultPage.emptyState.message が文字列でない → エラー', () => {
+    const def = clone();
+    def.resultPage.emptyState.message = 1;
+    const errors = validateDefinition(def);
+    expect(errors.some((e: string) => e.includes('emptyState'))).toBe(true);
+  });
+
+  it('resultPage は taxRate のみでも(任意フィールド未指定)エラーにしない', () => {
+    const def = clone();
+    def.resultPage = { taxRate: 0.1 };
+    const errors = validateDefinition(def);
+    expect(errors.some((e: string) => e.includes('resultPage'))).toBe(false);
+  });
+
   it('resolver.type が不正 → エラー', () => {
     const def = clone();
     def.recommendation.resolvers.brow.type = 'unknownType';
@@ -274,6 +309,46 @@ describe('validateDefinition — F1〜F6 追加検査', () => {
     def.questions = [];
     const errors = validateDefinition(def);
     expect(errors.some((e: string) => e.includes('questions は空にできません'))).toBe(true);
+  });
+
+  it('相関: sendResultMessage=true + liffUrl 空文字 → エラー', () => {
+    const def = clone();
+    def.sideEffects.sendResultMessage = true;
+    def.share.liffUrl = '';
+    const errors = validateDefinition(def);
+    expect(errors.some((e: string) => e.includes('liff.line.me'))).toBe(true);
+  });
+
+  it('相関: sendResultMessage=true + liff.line.me 形式でない URL → エラー', () => {
+    const def = clone();
+    def.sideEffects.sendResultMessage = true;
+    def.share.liffUrl = 'https://example.com/diagnosis';
+    const errors = validateDefinition(def);
+    expect(errors.some((e: string) => e.includes('liff.line.me'))).toBe(true);
+  });
+
+  it('相関(先頭アンカー): liff.line.me が先頭でない URL → エラー', () => {
+    // 途中に liff.line.me を含むだけの偽装 URL は弾く(先頭アンカーのみ許可)。
+    const def = clone();
+    def.sideEffects.sendResultMessage = true;
+    def.share.liffUrl = 'https://evil.example.com/liff.line.me/ABCD/x';
+    const errors = validateDefinition(def);
+    expect(errors.some((e: string) => e.includes('liff.line.me'))).toBe(true);
+  });
+
+  it('相関: sendResultMessage=true + プレースホルダ liffUrl(REPLACE_LIFF_ID)は通る', () => {
+    // シード既定は sendResultMessage=true かつ REPLACE_LIFF_ID プレースホルダ → エラー0件のまま
+    const def = clone();
+    expect(def.sideEffects.sendResultMessage).toBe(true);
+    expect(validateDefinition(def).some((e: string) => e.includes('liff.line.me'))).toBe(false);
+  });
+
+  it('相関: sendResultMessage=false なら liffUrl 空でも liffUrl エラーは出さない', () => {
+    const def = clone();
+    def.sideEffects.sendResultMessage = false;
+    def.share.liffUrl = '';
+    const errors = validateDefinition(def);
+    expect(errors.some((e: string) => e.includes('liff.line.me'))).toBe(false);
   });
 
   it('F4: スペース入りタグの lookup で誤った重複検出が起きない', () => {

@@ -297,7 +297,7 @@ CREATE TABLE diagnosis_submissions (
   result TEXT NOT NULL,                        -- 結果スナップショットJSON(下記)
   share_token TEXT UNIQUE,                     -- 共有URL用。crypto.randomUUID() 等の推測困難な値
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
+, request_id TEXT);
 
 CREATE TABLE entry_routes (
   id          TEXT PRIMARY KEY,
@@ -915,6 +915,9 @@ CREATE INDEX idx_conversion_events_point ON conversion_events (conversion_point_
 CREATE INDEX idx_diag_sub_created   ON diagnosis_submissions (diagnosis_id, created_at);
 
 CREATE INDEX idx_diag_sub_friend    ON diagnosis_submissions (friend_id);
+
+CREATE UNIQUE INDEX idx_diag_sub_request
+  ON diagnosis_submissions (diagnosis_id, request_id);
 
 CREATE INDEX idx_entry_routes_pool ON entry_routes (pool_id);
 

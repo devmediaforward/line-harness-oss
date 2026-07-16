@@ -116,6 +116,115 @@ export interface EventBookingMine {
   slot_ends_at: string;
 }
 
+// ============================================================
+// Diagnosis types
+//   回答用定義 (GET /api/liff/diagnoses/:slug) と
+//   結果スナップショット (@line-crm/shared の DiagnosisResult をミラー) 。
+//   LIFF アプリは @line-crm/shared に依存しない方針のためローカル定義する。
+// ============================================================
+
+export interface DiagnosisMeta {
+  name: string;
+  description: string;
+}
+
+export interface DiagnosisAxis {
+  id: string;
+  label: string;
+  shortLabel?: string;
+}
+
+export interface DiagnosisAnswerScale {
+  min: number;
+  max: number;
+  labels: string[];
+}
+
+export interface DiagnosisQuestion {
+  id: string;
+  axisId: string;
+  text: string;
+  direction: 'worry' | 'good';
+  worryTag: string | null;
+}
+
+/** GET /api/liff/diagnoses/:slug のレスポンス（採点・価格戦略は含まない）。 */
+export interface DiagnosisDefinitionForLiff {
+  meta: DiagnosisMeta;
+  axes: DiagnosisAxis[];
+  answerScale: DiagnosisAnswerScale;
+  questions: DiagnosisQuestion[];
+}
+
+export type DiagnosisGradeKey = 'keep' | 'almost' | 'warn';
+
+export interface DiagnosisResultAxisScore {
+  axisId: string;
+  label: string;
+  score: number;
+  grade: DiagnosisGradeKey;
+}
+
+export interface DiagnosisResultTag {
+  tag: string;
+  axisId: string;
+  point?: number;
+}
+
+export interface DiagnosisResultCard {
+  axisId: string;
+  title: string;
+  priceExTax: number;
+  priceInTax: number;
+  priceSuffix: string;
+  reason: string;
+  extras: string[];
+  notes: string[];
+  appeal?: string;
+}
+
+export interface DiagnosisResultAxisMessage {
+  axisId: string;
+  message: string;
+}
+
+export interface DiagnosisResultWeakPoint {
+  axisId: string;
+  label: string;
+  text: string | null;
+}
+
+/** diagnosis_submissions.result に保存されるスナップショット。 */
+export interface DiagnosisResult {
+  cleanPoints: Record<string, number>;
+  axisScores: DiagnosisResultAxisScore[];
+  weakestAxes: string[];
+  totalScore: number;
+  rank: string;
+  rankTitle: string;
+  rankSubcopy: string;
+  rankBody: string;
+  tags: DiagnosisResultTag[];
+  cards: DiagnosisResultCard[];
+  axisMessages: DiagnosisResultAxisMessage[];
+  droppedCards: string[];
+  emptyState: boolean;
+  // 表示用スナップショット（definition 由来・任意。無い場合はビュー側で汎用定数へフォールバック）
+  diagnosisName?: string;
+  weakPointHeading?: string;
+  weakPoints?: DiagnosisResultWeakPoint[];
+  softCta?: { text: string; subText?: string };
+  minorNotice?: string;
+  emptyStateTexts?: { message: string; cta?: string };
+}
+
+/** POST submissions / GET submissions/:sid の共通レスポンス。 */
+export interface DiagnosisSubmissionResponse {
+  submissionId: string;
+  result: DiagnosisResult;
+  shareUrl: string;
+}
+
 export const api = {
   menus: () => get<{ menus: MenuItem[] }>('/api/liff/booking/menus'),
   staffOf: (menuId: string) =>
@@ -154,4 +263,16 @@ export const api = {
     get<{ items: EventBookingMine[] }>(`/api/liff/events/me?tab=${tab}`),
   cancelMyEventBooking: (bookingId: string) =>
     post<{ ok: true }>(`/api/liff/events/me/${bookingId}/cancel`, {}),
+
+  // ===== Diagnosis =====
+  getDiagnosis: (slug: string) =>
+    get<DiagnosisDefinitionForLiff>(`/api/liff/diagnoses/${encodeURIComponent(slug)}`),
+  // requestId は再送冪等キー(同じ値の再送は二重保存・二重副作用を防ぐ)。
+  submitDiagnosis: (slug: string, answers: Record<string, number>, requestId?: string) =>
+    post<DiagnosisSubmissionResponse>(
+      `/api/liff/diagnoses/${encodeURIComponent(slug)}/submissions`,
+      { answers, requestId },
+    ),
+  getDiagnosisSubmission: (sid: string) =>
+    get<DiagnosisSubmissionResponse>(`/api/liff/diagnoses/submissions/${encodeURIComponent(sid)}`),
 };

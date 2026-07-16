@@ -553,10 +553,72 @@ function runValidation(input: unknown): string[] {
   }
 
   // ── resultPage ───────────────────────────────────────────────────────────
+  // taxRate 以外は任意。存在する場合のみ型検査する(未指定はエラーにしない)。
   if ('resultPage' in def && !isObj(def.resultPage)) {
     errors.push('resultPage がオブジェクトではありません');
-  } else if (isObj(def.resultPage) && typeof def.resultPage.taxRate !== 'number') {
-    errors.push('resultPage.taxRate が数値ではありません');
+  } else if (isObj(def.resultPage)) {
+    const rp = def.resultPage;
+    if (typeof rp.taxRate !== 'number') {
+      errors.push('resultPage.taxRate が数値ではありません');
+    }
+    if ('weakPointHeading' in rp && typeof rp.weakPointHeading !== 'string') {
+      errors.push('resultPage.weakPointHeading は文字列である必要があります');
+    }
+    if ('weakPointTexts' in rp) {
+      if (!isObj(rp.weakPointTexts)) {
+        errors.push('resultPage.weakPointTexts はオブジェクトである必要があります');
+      } else {
+        for (const [axisId, v] of Object.entries(rp.weakPointTexts)) {
+          if (typeof v !== 'string') {
+            errors.push(`resultPage.weakPointTexts["${axisId}"] は文字列である必要があります`);
+          }
+        }
+      }
+    }
+    if ('softCta' in rp) {
+      if (!isObj(rp.softCta)) {
+        errors.push('resultPage.softCta はオブジェクトである必要があります');
+      } else {
+        if (typeof rp.softCta.text !== 'string') {
+          errors.push('resultPage.softCta.text は文字列である必要があります');
+        }
+        if ('subText' in rp.softCta && typeof rp.softCta.subText !== 'string') {
+          errors.push('resultPage.softCta.subText は文字列である必要があります');
+        }
+      }
+    }
+    if ('minorNotice' in rp && typeof rp.minorNotice !== 'string') {
+      errors.push('resultPage.minorNotice は文字列である必要があります');
+    }
+    if ('emptyState' in rp) {
+      if (!isObj(rp.emptyState)) {
+        errors.push('resultPage.emptyState はオブジェクトである必要があります');
+      } else {
+        if (typeof rp.emptyState.message !== 'string') {
+          errors.push('resultPage.emptyState.message は文字列である必要があります');
+        }
+        if ('cta' in rp.emptyState && typeof rp.emptyState.cta !== 'string') {
+          errors.push('resultPage.emptyState.cta は文字列である必要があります');
+        }
+      }
+    }
+  }
+
+  // ── 相関検査: sendResultMessage=true なら share.liffUrl から liffId が抽出できること ─
+  // 結果メッセージの「結果を見る」ボタンは liff.line.me/{liffId}/... を組み立てるため、
+  // liffId が取れない(未設定・空文字・liff.line.me 形式でない)と壊れた URL のボタンが
+  // 送られてしまう。プレースホルダ(REPLACE_LIFF_ID 等)は形式上有効なので通す。
+  const sideEffects = isObj(def.sideEffects) ? def.sideEffects : {};
+  if (sideEffects.sendResultMessage === true) {
+    const share = isObj(def.share) ? def.share : {};
+    const liffUrl = typeof share.liffUrl === 'string' ? share.liffUrl : '';
+    // route の buildLiffResultUrl と同一判定: 先頭が https://liff.line.me/{liffId} の形のみ有効。
+    const m = liffUrl.match(/^https:\/\/liff\.line\.me\/([^/?#]+)/);
+    if (!m || !m[1]) {
+      errors.push(
+        'sideEffects.sendResultMessage が有効な場合、share.liffUrl は liff.line.me/{liffId} 形式(liffId が抽出できる)である必要があります',
+      );
+    }
   }
 
   return errors;

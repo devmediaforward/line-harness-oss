@@ -504,6 +504,50 @@ describe('F. 集約・注記・空状態', () => {
 });
 
 // =============================================================================
+// G. 表示スナップショット(definition 由来文言の焼き込み)
+// =============================================================================
+
+describe('G. 表示スナップショット', () => {
+  it('G1: diagnosisName / weakPointHeading / softCta / minorNotice を definition から複写', () => {
+    const res = runDiagnosis(def, answersWith({ T1: 5 }));
+    expect(res.diagnosisName).toBe(def.meta.name);
+    expect(res.weakPointHeading).toBe(def.resultPage.weakPointHeading);
+    expect(res.softCta).toEqual({
+      text: def.resultPage.softCta.text,
+      subText: def.resultPage.softCta.subText,
+    });
+    expect(res.minorNotice).toBe(def.resultPage.minorNotice);
+  });
+
+  it('G2: weakPoints — 全軸warn時、weakestAxes 順で text は weakPointTexts と一致', () => {
+    const res = runDiagnosis(def, uniformAnswers(5)); // 全軸 1.0 → 全 warn
+    expect(res.axisScores.every((a) => a.grade === 'warn')).toBe(true);
+    expect(res.weakPoints?.map((w) => w.axisId)).toEqual(res.weakestAxes);
+    for (const w of res.weakPoints ?? []) {
+      expect(w.label).toBe(def.axes.find((a) => a.id === w.axisId)!.label);
+      expect(w.text).toBe(def.resultPage.weakPointTexts[w.axisId] ?? null);
+    }
+  });
+
+  it('G3: weakPoints — warn 軸のみ抽出(hair のみ warn)', () => {
+    const res = runDiagnosis(def, answersWith({ H1: 3, H2: 3, H3: 5, H4: 5, H5: 3, H6: 5 }));
+    expect(res.axisScores.find((a) => a.axisId === 'hair')!.grade).toBe('warn');
+    expect(res.weakPoints?.map((w) => w.axisId)).toEqual(['hair']);
+    expect(res.weakPoints?.[0].text).toBe(def.resultPage.weakPointTexts.hair);
+  });
+
+  it('G4: emptyStateTexts — 空状態(A2)で resultPage.emptyState を複写・weakPoints は空', () => {
+    const res = runDiagnosis(def, answersWith()); // 全軸 5.0 keep・タグ0
+    expect(res.emptyState).toBe(true);
+    expect(res.emptyStateTexts).toEqual({
+      message: def.resultPage.emptyState.message,
+      cta: def.resultPage.emptyState.cta,
+    });
+    expect(res.weakPoints).toEqual([]);
+  });
+});
+
+// =============================================================================
 // 入力検証(Step 1)
 // =============================================================================
 
