@@ -46,10 +46,10 @@ export default function DiagnosisResult() {
   }
 
   return (
-    <div className="max-w-md mx-auto p-4 pb-12 min-h-screen">
-      <div className="af-fade-in">
-        <DiagnosisResultView result={state.data.result} shareUrl={state.data.shareUrl} />
-      </div>
-    </div>
+    <DiagnosisResultView
+      result={state.data.result}
+      shareUrl={state.data.shareUrl}
+      submissionId={state.data.submissionId}
+    />
   );
 }

@@ -548,6 +548,37 @@ describe('G. 表示スナップショット', () => {
 });
 
 // =============================================================================
+// H. ランク画像の焼き込み(R6)
+// =============================================================================
+
+describe('H. ランク画像の焼き込み (R6)', () => {
+  function defWithRankImages(images: Record<string, string>): DiagnosisDefinition {
+    const cloned = JSON.parse(JSON.stringify(def)) as DiagnosisDefinition;
+    (cloned.resultPage as { rankImages?: Record<string, string> }).rankImages = images;
+    return cloned;
+  }
+
+  it('H1: 該当ランクの画像URLを result.rankImageUrl に焼き込む', () => {
+    const d = defWithRankImages({ S: 'https://img.example.com/s.png', D: 'https://img.example.com/d.png' });
+    const res = runDiagnosis(d, answersWith()); // 全問1 → S
+    expect(res.rank).toBe('S');
+    expect(res.rankImageUrl).toBe('https://img.example.com/s.png');
+  });
+
+  it('H2: rankImages 自体が無ければ rankImageUrl は付かない(後方互換)', () => {
+    const res = runDiagnosis(def, answersWith());
+    expect(res.rankImageUrl).toBeUndefined();
+  });
+
+  it('H3: 該当ランクのエントリが無ければ rankImageUrl は付かない', () => {
+    const d = defWithRankImages({ D: 'https://img.example.com/d.png' }); // S は無い
+    const res = runDiagnosis(d, answersWith()); // 全問1 → S
+    expect(res.rank).toBe('S');
+    expect(res.rankImageUrl).toBeUndefined();
+  });
+});
+
+// =============================================================================
 // 入力検証(Step 1)
 // =============================================================================
 

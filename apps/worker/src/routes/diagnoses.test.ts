@@ -1055,4 +1055,49 @@ describe('GET /d/:shareToken', () => {
     const res = await req('GET', '/d/tok-share');
     expect(res.headers.get('Cache-Control')).toBe('public, max-age=300');
   });
+
+  // ── R6: ランク画像(snapshot.rankImageUrl 由来) ──────────────────────────────
+  test('R6: rankImageUrl(https)があればヒーローに <img> を表示', async () => {
+    const result = { ...runDiagnosis(redentDef, answersWith()), rankImageUrl: 'https://cdn.example.com/rank-s.png' };
+    dbMocks.getDiagnosisSubmissionByShareToken.mockResolvedValue(makeShareSubmission(result));
+    dbMocks.getDiagnosisById.mockResolvedValue(makeDiagRow());
+    const res = await req('GET', '/d/tok-share');
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('class="rank-img"');
+    expect(html).toContain('src="https://cdn.example.com/rank-s.png"');
+  });
+
+  test('R6: rankImageUrl が無ければ <img> を表示しない(現行のランク文字ヒーロー)', async () => {
+    const result = runDiagnosis(redentDef, answersWith());
+    dbMocks.getDiagnosisSubmissionByShareToken.mockResolvedValue(makeShareSubmission(result));
+    dbMocks.getDiagnosisById.mockResolvedValue(makeDiagRow());
+    const res = await req('GET', '/d/tok-share');
+    const html = await res.text();
+    expect(html).not.toContain('class="rank-img"'); // CSS 定義(.rank-img{...})は常在するため img 要素で判定
+    expect(html).toContain(`<div class="rank">${result.rank}</div>`); // 現行ヒーローは維持
+  });
+
+  test('R6: rankImageUrl が https:// でなければ表示しない(javascript: を弾く)', async () => {
+    const result = { ...runDiagnosis(redentDef, answersWith()), rankImageUrl: 'javascript:alert(1)' };
+    dbMocks.getDiagnosisSubmissionByShareToken.mockResolvedValue(makeShareSubmission(result));
+    dbMocks.getDiagnosisById.mockResolvedValue(makeDiagRow());
+    const res = await req('GET', '/d/tok-share');
+    const html = await res.text();
+    expect(html).not.toContain('class="rank-img"');
+    expect(html).not.toContain('javascript:');
+  });
+
+  test('R6: rankImageUrl はエスケープされる(属性破壊を無害化)', async () => {
+    const result = {
+      ...runDiagnosis(redentDef, answersWith()),
+      rankImageUrl: 'https://cdn.example.com/a.png"><script>alert(1)</script>',
+    };
+    dbMocks.getDiagnosisSubmissionByShareToken.mockResolvedValue(makeShareSubmission(result));
+    dbMocks.getDiagnosisById.mockResolvedValue(makeDiagRow());
+    const res = await req('GET', '/d/tok-share');
+    const html = await res.text();
+    expect(html).not.toContain('"><script>alert(1)</script>');
+    expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+  });
 });

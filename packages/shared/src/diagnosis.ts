@@ -206,6 +206,8 @@ export interface DiagnosisResultPage {
   softCta: DiagnosisSoftCta;
   minorNotice: string;
   emptyState: DiagnosisEmptyState;
+  /** rank -> ランク別キャラクター画像URL(任意)。https:// のみ。結果ヒーローの主役 */
+  rankImages?: Record<string, string>;
 }
 
 export interface DiagnosisShare {
@@ -348,4 +350,6 @@ export interface DiagnosisResult {
   minorNotice?: string;
   /** 空状態の文言(resultPage.emptyState) */
   emptyStateTexts?: ResultEmptyStateTexts;
+  /** 該当ランクのキャラクター画像URL(resultPage.rankImages[rank]。無ければ省略) */
+  rankImageUrl?: string;
 }

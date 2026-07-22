@@ -351,6 +351,50 @@ describe('validateDefinition — F1〜F6 追加検査', () => {
     expect(errors.some((e: string) => e.includes('liff.line.me'))).toBe(false);
   });
 
+  it('R6: rankImages 正常系(定義済みランクキー + https URL)→ エラーなし', () => {
+    const def = clone();
+    def.resultPage.rankImages = {
+      S: 'https://cdn.example.com/s.png',
+      D: 'https://cdn.example.com/d.png',
+    };
+    expect(validateDefinition(def)).toEqual([]);
+  });
+
+  it('R6: rankImages の値が https:// でない(http)→ エラー', () => {
+    const def = clone();
+    def.resultPage.rankImages = { S: 'http://cdn.example.com/s.png' };
+    const errors = validateDefinition(def);
+    expect(errors.some((e: string) => e.includes('rankImages') && e.includes('https://'))).toBe(true);
+  });
+
+  it('R6: rankImages の値が https:// 単体(ホスト無し)→ エラー', () => {
+    const def = clone();
+    def.resultPage.rankImages = { S: 'https://' };
+    const errors = validateDefinition(def);
+    expect(errors.some((e: string) => e.includes('rankImages') && e.includes('https://'))).toBe(true);
+  });
+
+  it('R6: rankImages の値が文字列でない → エラー', () => {
+    const def = clone();
+    def.resultPage.rankImages = { S: 123 };
+    const errors = validateDefinition(def);
+    expect(errors.some((e: string) => e.includes('rankImages') && e.includes('https://'))).toBe(true);
+  });
+
+  it('R6: rankImages のキーが未知ランク → エラー', () => {
+    const def = clone();
+    def.resultPage.rankImages = { Z: 'https://cdn.example.com/z.png' };
+    const errors = validateDefinition(def);
+    expect(errors.some((e: string) => e.includes('rankImages') && e.includes('存在しません'))).toBe(true);
+  });
+
+  it('R6: rankImages がオブジェクトでない → エラー', () => {
+    const def = clone();
+    def.resultPage.rankImages = 'nope';
+    const errors = validateDefinition(def);
+    expect(errors.some((e: string) => e.includes('rankImages'))).toBe(true);
+  });
+
   it('F4: スペース入りタグの lookup で誤った重複検出が起きない', () => {
     // keyTags ["a","b","a b"]。名前連結方式だと {a,b} と {a b} が衝突するが
     // インデックス連結では別物。重複エラーが出ないことを確認(網羅不足エラーは別途出る)。

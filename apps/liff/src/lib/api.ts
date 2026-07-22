@@ -216,6 +216,8 @@ export interface DiagnosisResult {
   softCta?: { text: string; subText?: string };
   minorNotice?: string;
   emptyStateTexts?: { message: string; cta?: string };
+  /** 該当ランクのキャラクター画像URL（R6・任意。https:// のみ）。 */
+  rankImageUrl?: string;
 }
 
 /** POST submissions / GET submissions/:sid の共通レスポンス。 */

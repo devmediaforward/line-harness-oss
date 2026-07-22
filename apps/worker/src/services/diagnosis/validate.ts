@@ -31,6 +31,17 @@ function isInteger(v: unknown): v is number {
   return typeof v === 'number' && Number.isInteger(v);
 }
 
+/** https スキームかつホスト付きの絶対URLか(rankImages 用。壊れURLを弾く)。 */
+function isHttpsUrl(v: unknown): boolean {
+  if (typeof v !== 'string') return false;
+  try {
+    const u = new URL(v);
+    return u.protocol === 'https:' && u.hostname !== '';
+  } catch {
+    return false;
+  }
+}
+
 const KNOWN_CONDITION_KEYS = new Set([
   'hasTag',
   'hasAnyTag',
@@ -480,6 +491,8 @@ function runValidation(input: unknown): string[] {
   if (!isObj(scoring.tagMerges)) errors.push('scoring.tagMerges がオブジェクトではありません');
 
   // 検査3: ranks(空でない配列 / 0始まりの昇順 / rank名重複なし / 要素の型)
+  // 定義済みランク名は resultPage.rankImages のキー検査でも使うため関数スコープへ集約する。
+  const definedRanks = new Set<string>();
   if (!Array.isArray(scoring.ranks) || scoring.ranks.length === 0) {
     errors.push('scoring.ranks が空でない配列ではありません');
   } else {
@@ -489,7 +502,6 @@ function runValidation(input: unknown): string[] {
       errors.push('ranks の最初の min は 0 である必要があります');
     }
     let prev = -Infinity;
-    const rankNames = new Set<string>();
     for (const r of ranks) {
       if (!isObj(r)) {
         errors.push('ranks に不正な要素があります');
@@ -507,8 +519,8 @@ function runValidation(input: unknown): string[] {
         }
       }
       if (typeof r.rank === 'string') {
-        if (rankNames.has(r.rank)) errors.push(`ranks の rank 名が重複しています: "${r.rank}"`);
-        rankNames.add(r.rank);
+        if (definedRanks.has(r.rank)) errors.push(`ranks の rank 名が重複しています: "${r.rank}"`);
+        definedRanks.add(r.rank);
       }
     }
   }
@@ -599,6 +611,21 @@ function runValidation(input: unknown): string[] {
         }
         if ('cta' in rp.emptyState && typeof rp.emptyState.cta !== 'string') {
           errors.push('resultPage.emptyState.cta は文字列である必要があります');
+        }
+      }
+    }
+    // R6: rankImages(任意)。オブジェクトで、キーは定義済みランク・値は https:// URL。
+    if ('rankImages' in rp) {
+      if (!isObj(rp.rankImages)) {
+        errors.push('resultPage.rankImages はオブジェクトである必要があります');
+      } else {
+        for (const [rank, url] of Object.entries(rp.rankImages)) {
+          if (!definedRanks.has(rank)) {
+            errors.push(`resultPage.rankImages のキー "${rank}" が scoring.ranks に存在しません`);
+          }
+          if (!isHttpsUrl(url)) {
+            errors.push(`resultPage.rankImages["${rank}"] は https:// のURL(ホスト付き)である必要があります`);
+          }
         }
       }
     }

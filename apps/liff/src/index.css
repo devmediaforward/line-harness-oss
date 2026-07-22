@@ -113,3 +113,203 @@ body {
   padding: 12px;
   background: #fafafa;
 }
+
+/* =====================================================================
+ * dx-* : 診断ページ専用スコープ(回答フロー + 結果ページ)
+ * クイズ番組 / ゲーム UI 風のダーク基調テーマ。接頭辞 dx- で閉じており、
+ * apps/liff の他ページ(af-*・Tailwind)には一切影響しない。
+ * 診断固有の色・語はここに書かない(汎用配色のみ)。フォント追加なし。
+ * ===================================================================== */
+
+.dx-screen,
+.dx-result {
+  --dx-bg: #0e1017;
+  --dx-surface: #191d29;
+  --dx-surface-2: #222839;
+  --dx-border: rgba(255, 255, 255, 0.09);
+  --dx-text: #f3f5fb;
+  --dx-text-dim: #98a1b8;
+  --dx-accent: #7c5cff;
+  --dx-accent-2: #ec4899;
+  min-height: 100vh;
+  color: var(--dx-text);
+  background:
+    radial-gradient(130% 70% at 50% -10%, #202741 0%, rgba(32, 39, 65, 0) 55%),
+    var(--dx-bg);
+  font-variant-numeric: tabular-nums;
+}
+.dx-tnum { font-variant-numeric: tabular-nums; }
+
+.dx-wrap {
+  max-width: 30rem;
+  margin: 0 auto;
+  padding: 12px 16px 28px;
+}
+
+/* ── 回答フロー: 常設ヘッダ(進捗 + 軸ドット + 残数) ────────────────── */
+.dx-head { position: sticky; top: 0; z-index: 5; padding: 10px 0 12px;
+  background: linear-gradient(180deg, var(--dx-bg) 72%, rgba(14, 16, 23, 0)); }
+.dx-head-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.dx-back { font-size: 13px; font-weight: 600; color: var(--dx-text-dim); background: none; cursor: pointer; padding: 4px 2px; }
+.dx-back:active { color: var(--dx-text); }
+.dx-count { font-size: 12px; font-weight: 700; color: var(--dx-text-dim); }
+.dx-count b { color: var(--dx-text); font-size: 14px; }
+
+.dx-axis-dots { display: flex; gap: 6px; margin-bottom: 8px; }
+.dx-axis-dot { flex: 1; height: 5px; border-radius: 999px; background: rgba(255, 255, 255, 0.12); transition: background 0.3s; }
+.dx-axis-dot.is-done { background: linear-gradient(90deg, var(--dx-accent), var(--dx-accent-2)); }
+.dx-axis-dot.is-active { background: rgba(255, 255, 255, 0.32); }
+
+.dx-bar { height: 8px; width: 100%; border-radius: 999px; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
+.dx-bar-fill { height: 100%; border-radius: 999px; width: 0;
+  background: linear-gradient(90deg, #6a5cff 0%, #a855f7 55%, #ec4899 100%);
+  box-shadow: 0 0 12px rgba(124, 92, 255, 0.5); transition: width 0.4s cubic-bezier(0.22, 1, 0.36, 1), background 0.4s; }
+.dx-bar-fill.is-hot { background: linear-gradient(90deg, #f59e0b 0%, #f43f5e 100%); box-shadow: 0 0 14px rgba(244, 63, 94, 0.55); }
+.dx-remain { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; font-size: 12px; font-weight: 700; color: var(--dx-text-dim); }
+.dx-remain .dx-soon { color: #f8b34d; }
+
+/* ── 設問カード + スライド遷移(A1) ───────────────────────────────── */
+.dx-q { padding-top: 22px; }
+.dx-q-enter-fwd { animation: dx-slide-in-right 0.22s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.dx-q-enter-back { animation: dx-slide-in-left 0.22s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.dx-axis-label { font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase;
+  background: linear-gradient(90deg, var(--dx-accent), var(--dx-accent-2)); -webkit-background-clip: text; background-clip: text; color: transparent; margin-bottom: 10px; }
+.dx-qtext { font-size: 21px; line-height: 1.5; font-weight: 800; color: var(--dx-text); margin-bottom: 22px; text-wrap: balance; }
+
+/* ── 選択肢(A2: 強度ビジュアル + 押下フィードバック) ───────────────── */
+.dx-opts { display: flex; flex-direction: column; gap: 10px; }
+.dx-opt { position: relative; display: flex; align-items: center; gap: 13px; width: 100%; text-align: left;
+  padding: 14px 15px; border-radius: 15px; border: 1px solid var(--dx-border);
+  background: linear-gradient(var(--dx-opt-tint, transparent), var(--dx-opt-tint, transparent)), var(--dx-surface);
+  color: var(--dx-text); font-weight: 700; font-size: var(--dx-opt-fs, 15px); cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25); transition: transform 0.11s ease, box-shadow 0.15s, border-color 0.15s; }
+.dx-opt:active { transform: scale(0.975); }
+.dx-opt-pip { flex: 0 0 auto; width: var(--dx-opt-size, 12px); height: var(--dx-opt-size, 12px); border-radius: 50%;
+  background: var(--dx-opt-color, #64748b); box-shadow: 0 0 10px var(--dx-opt-color, #64748b); }
+.dx-opt-label { flex: 1; }
+.dx-opt.is-selected { border-color: transparent; color: #fff;
+  background: linear-gradient(135deg, var(--dx-accent) 0%, var(--dx-accent-2) 100%);
+  box-shadow: 0 4px 18px rgba(124, 92, 255, 0.4); transform: scale(1.01); }
+.dx-opt.is-selected .dx-opt-pip { background: #fff; box-shadow: 0 0 10px rgba(255, 255, 255, 0.7); }
+
+/* ── 軸クリア演出(A3・応援型) ──────────────────────────────────── */
+.dx-inter { position: fixed; inset: 0; z-index: 30; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; padding: 32px; cursor: pointer;
+  background: radial-gradient(120% 80% at 50% 30%, #262e4c 0%, #0e1017 70%); animation: dx-fade 0.2s ease both; }
+.dx-inter-emoji { font-size: 60px; line-height: 1; animation: dx-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+.dx-inter-hi { margin-top: 14px; font-size: 26px; font-weight: 900; color: var(--dx-text); }
+.dx-inter-sub { margin-top: 6px; font-size: 15px; font-weight: 700; color: var(--dx-text-dim); }
+.dx-inter-dots { display: flex; gap: 10px; margin-top: 20px; }
+.dx-inter-dot { width: 13px; height: 13px; border-radius: 50%; background: rgba(255, 255, 255, 0.16); }
+.dx-inter-dot.is-done { background: linear-gradient(135deg, var(--dx-accent), var(--dx-accent-2)); box-shadow: 0 0 12px rgba(124, 92, 255, 0.6); }
+.dx-inter-go { margin-top: 22px; font-size: 13px; font-weight: 700; color: var(--dx-text-dim); }
+
+/* ── 採点中演出(A5) ────────────────────────────────────────────── */
+.dx-collect { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 70vh; text-align: center; }
+.dx-collect-axes { display: flex; gap: 14px; margin-bottom: 22px; }
+.dx-collect-axis { width: 44px; height: 44px; border-radius: 14px; background: var(--dx-surface-2); border: 1px solid var(--dx-border);
+  display: flex; align-items: center; justify-content: center; font-size: 20px; opacity: 0.4; animation: dx-lamp 1.4s ease-in-out infinite; }
+.dx-collect-title { font-size: 17px; font-weight: 800; color: var(--dx-text); }
+.dx-collect-sub { margin-top: 6px; font-size: 12px; color: var(--dx-text-dim); }
+.dx-spinner { width: 34px; height: 34px; border-radius: 50%; border: 3px solid rgba(255, 255, 255, 0.15); border-top-color: var(--dx-accent); animation: dx-spin 0.8s linear infinite; margin-bottom: 14px; }
+
+/* ── 結果ページ ─────────────────────────────────────────────────── */
+.dx-result .dx-wrap { padding-bottom: 104px; } /* 固定シェアバー分の余白 */
+.dx-name { text-align: center; font-size: 12px; font-weight: 700; color: var(--dx-text-dim); margin: 4px 0 14px; }
+
+.dx-hero { position: relative; overflow: hidden; border-radius: 22px; padding: 30px 22px 26px; text-align: center; color: #fff;
+  background: var(--dx-surface); box-shadow: 0 10px 34px rgba(0, 0, 0, 0.4); }
+.dx-hero-bg { position: absolute; inset: 0; z-index: 0; }
+.dx-hero-bg.dx-anim { animation: dx-fade 0.7s ease both; }
+.dx-hero > * { position: relative; z-index: 1; }
+.dx-hero-img { display: block; width: 190px; max-width: 62%; height: auto; aspect-ratio: 1 / 1; margin: 0 auto 12px; object-fit: contain;
+  filter: drop-shadow(0 8px 20px rgba(0, 0, 0, 0.45)); }
+.dx-hero-rank { font-size: 78px; font-weight: 900; line-height: 0.95; text-shadow: 0 3px 12px rgba(0, 0, 0, 0.3); }
+.dx-hero-img.dx-anim, .dx-hero-rank.dx-anim { animation: dx-pop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+.dx-hero-title { margin-top: 8px; font-size: 19px; font-weight: 800; }
+.dx-hero-score { margin-top: 12px; display: inline-block; border-radius: 999px; background: rgba(255, 255, 255, 0.22); padding: 6px 18px; font-size: 15px; font-weight: 800; }
+.dx-hero-sub { margin-top: 12px; font-size: 14px; line-height: 1.7; opacity: 0.96; white-space: pre-wrap; }
+
+.dx-hero-share { margin-top: 14px; }
+
+/* 紙吹雪(R1・S/A のみ・ループなし・全画面に降らせる) */
+.dx-confetti { position: fixed; inset: 0; z-index: 25; overflow: hidden; pointer-events: none; }
+.dx-confetti-piece { position: absolute; top: -16px; width: 9px; height: 14px; border-radius: 2px; opacity: 0; animation: dx-confetti-fall 1.5s cubic-bezier(0.4, 0.2, 0.7, 1) forwards; }
+
+.dx-section { margin-top: 22px; }
+.dx-h2 { font-size: 15px; font-weight: 800; color: var(--dx-text); margin-bottom: 12px; }
+
+.dx-card { background: var(--dx-surface); border: 1px solid var(--dx-border); border-radius: 16px; padding: 16px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22); }
+.dx-radar-wrap { display: flex; justify-content: center; }
+.dx-grades { margin-top: 12px; border-radius: 14px; border: 1px solid var(--dx-border); overflow: hidden; }
+.dx-grade-row { display: flex; align-items: center; justify-content: space-between; padding: 11px 14px; }
+.dx-grade-row + .dx-grade-row { border-top: 1px solid var(--dx-border); }
+.dx-grade-label { font-size: 14px; font-weight: 600; color: var(--dx-text); }
+.dx-grade-right { display: flex; align-items: center; gap: 10px; }
+.dx-grade-tag { font-size: 14px; font-weight: 800; }
+.dx-grade-score { min-width: 32px; text-align: right; font-size: 14px; color: var(--dx-text-dim); }
+
+.dx-weak { background: rgba(244, 63, 94, 0.1); border: 1px solid rgba(244, 63, 94, 0.28); border-radius: 14px; padding: 13px 15px; }
+.dx-weak + .dx-weak { margin-top: 10px; }
+.dx-weak-head { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 800; color: #fca5b4; }
+.dx-weak-text { margin-top: 5px; font-size: 12px; line-height: 1.7; color: var(--dx-text-dim); }
+
+.dx-body-text { font-size: 14px; line-height: 1.85; color: #d3d8e6; white-space: pre-wrap; }
+
+/* おすすめ一覧: 各カードは Reveal の div ラッパーに包まれるため隣接セレクタが効かない。
+ * ラッパー深さに依存しない flex gap で間隔を作る。 */
+.dx-reco-list { display: flex; flex-direction: column; gap: 12px; }
+.dx-reco { background: var(--dx-surface); border: 1px solid var(--dx-border); border-radius: 16px; padding: 16px; box-shadow: 0 3px 12px rgba(0, 0, 0, 0.25); }
+.dx-reco-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.dx-reco-title { font-size: 16px; font-weight: 800; color: var(--dx-text); }
+.dx-reco-extra { flex-shrink: 0; font-size: 11px; font-weight: 700; border-radius: 999px; padding: 3px 9px; background: rgba(16, 185, 129, 0.18); color: #6ee7b7; }
+.dx-reco-price { margin-top: 8px; font-size: 20px; font-weight: 900; color: var(--dx-text); }
+.dx-reco-reason { margin-top: 8px; font-size: 13px; line-height: 1.75; color: #c7cdda; }
+.dx-reco-notes { margin-top: 8px; display: flex; flex-direction: column; gap: 3px; }
+.dx-reco-note { font-size: 11px; line-height: 1.6; color: var(--dx-text-dim); }
+.dx-msg { background: var(--dx-surface); border: 1px solid var(--dx-border); border-radius: 14px; padding: 13px 15px; font-size: 13px; line-height: 1.75; color: #c7cdda; }
+.dx-empty { text-align: center; background: var(--dx-surface); border: 1px solid var(--dx-border); border-radius: 16px; padding: 22px 16px; }
+.dx-empty-msg { font-size: 14px; line-height: 1.7; color: #d3d8e6; }
+.dx-empty-cta { margin-top: 8px; font-size: 12px; color: var(--dx-text-dim); }
+
+.dx-softcta { text-align: center; background: linear-gradient(135deg, rgba(124, 92, 255, 0.14), rgba(236, 72, 153, 0.14)); border: 1px solid var(--dx-border); border-radius: 16px; padding: 16px; }
+.dx-softcta-text { font-size: 14px; font-weight: 800; color: var(--dx-text); }
+.dx-softcta-sub { margin-top: 4px; font-size: 12px; color: var(--dx-text-dim); }
+.dx-minor { margin-top: 18px; text-align: center; font-size: 11px; line-height: 1.7; color: var(--dx-text-dim); }
+
+/* シェアボタン(汎用) */
+.dx-btn { width: 100%; padding: 14px; border-radius: 14px; font-weight: 800; font-size: 15px; cursor: pointer; transition: transform 0.1s, opacity 0.15s; border: none; }
+.dx-btn:active { transform: scale(0.98); }
+.dx-btn-primary { color: #fff; background: linear-gradient(135deg, var(--dx-accent), var(--dx-accent-2)); box-shadow: 0 4px 16px rgba(124, 92, 255, 0.4); }
+.dx-btn-ghost { color: var(--dx-text); background: rgba(255, 255, 255, 0.08); border: 1px solid var(--dx-border); font-size: 13px; padding: 12px; }
+
+/* 固定フッターのシェアバー(R5) */
+.dx-sharebar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+  background: rgba(16, 19, 28, 0.92); backdrop-filter: blur(10px); border-top: 1px solid var(--dx-border); }
+.dx-sharebar-inner { max-width: 30rem; margin: 0 auto; display: flex; gap: 10px; }
+.dx-sharebar .dx-btn { padding: 12px; font-size: 14px; }
+.dx-share-copy { flex: 0 0 auto; width: 44%; }
+.dx-notice { position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%); z-index: 21; background: rgba(0, 0, 0, 0.82); color: #fff; font-size: 12px; font-weight: 600; padding: 8px 16px; border-radius: 999px; }
+
+/* 順次フェードイン(R4)。dx-reveal は「アニメする時だけ」付く → 未付与なら常時可視 */
+.dx-reveal { opacity: 0; transform: translateY(14px); transition: opacity 0.5s ease, transform 0.5s cubic-bezier(0.22, 1, 0.36, 1); }
+.dx-reveal.dx-in { opacity: 1; transform: none; }
+
+/* ── keyframes ─────────────────────────────────────────────────── */
+@keyframes dx-slide-in-right { from { opacity: 0; transform: translateX(30px); } to { opacity: 1; transform: none; } }
+@keyframes dx-slide-in-left { from { opacity: 0; transform: translateX(-30px); } to { opacity: 1; transform: none; } }
+@keyframes dx-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes dx-pop { 0% { opacity: 0; transform: scale(0.4); } 60% { opacity: 1; transform: scale(1.08); } 100% { opacity: 1; transform: scale(1); } }
+@keyframes dx-spin { to { transform: rotate(360deg); } }
+@keyframes dx-lamp { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; box-shadow: 0 0 16px rgba(124, 92, 255, 0.6); } }
+@keyframes dx-confetti-fall { 0% { opacity: 1; transform: translateY(0) rotate(0deg); } 100% { opacity: 0; transform: translateY(360px) rotate(540deg); } }
+
+/* ── アクセシビリティ: モーション無効化(C6) ───────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .dx-screen *, .dx-result * {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+  .dx-reveal { opacity: 1 !important; transform: none !important; }
+}

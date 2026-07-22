@@ -208,6 +208,7 @@ interface SharePageView {
   ogDescription: string | null;
   ogImage: string | null; // 空文字/未設定は null(og:image を出さない)
   ctaUrl: string | null; // null なら「自分も診断する」ボタン非表示
+  rankImageUrl: string | null; // https:// のランク画像。null なら現行のランク文字ヒーロー
   pageUrl: string;
 }
 
@@ -247,6 +248,11 @@ function buildSharePageHtml(v: SharePageView): string {
     })
     .join('');
 
+  // ランク画像(https:// のみ route 側で通過済み)。alt は診断非依存の汎用文言。
+  const rankImg = v.rankImageUrl
+    ? `<img class="rank-img" src="${escapeShareHtml(v.rankImageUrl)}" alt="ランク ${rank}" width="180" height="180">`
+    : '';
+
   const ctaBlock = v.ctaUrl
     ? `<a class="cta" href="${escapeShareHtml(v.ctaUrl)}">自分も診断する</a>`
     : '';
@@ -271,6 +277,7 @@ ${metaLines.join('\n')}
 body{font-family:'Hiragino Sans','Helvetica Neue',system-ui,sans-serif;background:#f5f7f5;color:#1f2937;min-height:100vh;padding:20px 16px}
 .wrap{max-width:420px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
 .hero{border-radius:20px;padding:32px 24px;text-align:center;color:#fff;box-shadow:0 2px 20px rgba(0,0,0,0.08)}
+.rank-img{display:block;width:180px;max-width:64%;height:auto;aspect-ratio:1/1;margin:0 auto 14px;border-radius:16px;object-fit:contain}
 .rank{font-size:72px;font-weight:900;line-height:1;text-shadow:0 2px 8px rgba(0,0,0,0.18)}
 .rank-title{margin-top:12px;font-size:18px;font-weight:700}
 .score{margin-top:14px;display:inline-block;border-radius:999px;background:rgba(255,255,255,0.22);padding:6px 18px;font-size:14px;font-weight:600}
@@ -291,6 +298,7 @@ body{font-family:'Hiragino Sans','Helvetica Neue',system-ui,sans-serif;backgroun
 <body>
 <main class="wrap">
 <section class="hero" style="background:${theme.gradient}">
+${rankImg}
 <div class="rank">${rank}</div>
 <div class="rank-title">${rankTitle}</div>
 <div class="score">スコア ${v.totalScore}点</div>
@@ -848,6 +856,10 @@ diagnoses.get('/d/:shareToken', async (c) => {
     const ogImage =
       typeof rawOgImage === 'string' && rawOgImage.trim() ? rawOgImage.trim() : null;
 
+    // R6: スナップショット由来のランク画像。https:// のみヒーローに表示(定義非依存)。
+    const rawRankImage = typeof result.rankImageUrl === 'string' ? result.rankImageUrl.trim() : '';
+    const rankImageUrl = rawRankImage.startsWith('https://') ? rawRankImage : null;
+
     const safeScore = typeof result.totalScore === 'number' ? result.totalScore : 0;
     const safeRankTitle = typeof result.rankTitle === 'string' ? result.rankTitle : '';
     const ogTitleTemplate = share?.ogTitleTemplate?.trim();
@@ -870,6 +882,7 @@ diagnoses.get('/d/:shareToken', async (c) => {
       ogDescription: share?.ogDescription?.trim() ? share.ogDescription : null,
       ogImage,
       ctaUrl,
+      rankImageUrl,
       pageUrl: `${resolveShareBaseUrl(c)}/d/${shareToken}`,
     };
 

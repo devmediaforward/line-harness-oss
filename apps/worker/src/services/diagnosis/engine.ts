@@ -422,6 +422,11 @@ export function runDiagnosis(
     if (typeof rp.emptyState.cta === 'string') emptyStateTexts.cta = rp.emptyState.cta;
     result.emptyStateTexts = emptyStateTexts;
   }
+  // R6: 該当ランクのキャラクター画像URLを焼き込む(該当エントリが無ければ付けない)。
+  if (rp.rankImages) {
+    const url = rp.rankImages[chosenRank.rank];
+    if (typeof url === 'string') result.rankImageUrl = url;
+  }
 
   return result;
 }
