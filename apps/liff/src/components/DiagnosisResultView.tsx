@@ -3,39 +3,29 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type {
   DiagnosisResult,
   DiagnosisResultAxisScore,
+  DiagnosisResultBooking,
+  DiagnosisResultCard,
+  DiagnosisResultDiscount,
   DiagnosisResultWeakPoint,
   DiagnosisGradeKey,
 } from '../lib/api.js';
+import DiagnosisBandCurve from './DiagnosisBandCurve.js';
 import { prefersReducedMotion } from '../lib/motion.js';
+import { rankColor } from '../lib/diagnosis-theme.js';
 
 // =============================================================================
 // 診断 結果表示（画面3）— Diagnosis.tsx（回答直後）と DiagnosisResult.tsx（再表示）
 // で共用する。描画は result スナップショットのみに依存する（definition を再取得
 // しない）。スナップショットに含まれない表示文言（grade ラベル・見出し・emptyState
-// 文言・ソフトCTA・未成年注記）は診断固有語を避けた汎用文言のコンポーネント定数
-// として持つ。UI は dx-* スコープのダーク基調テーマ + 初回表示の演出（R1〜R6）。
+// 文言・ソフトCTA）は診断固有語を避けた汎用文言のコンポーネント定数として持つ。
+// UI は dx-* スコープの「ランク色の帯 + 弧 + 紙面」。
 // =============================================================================
 
-// ── ランク別アクセント配色（D→S）。ヒーロー背景グラデ + レーダー配色に使う。 ──
-interface RankTheme {
-  gradient: string;
-  accent: string;
-}
-const RANK_THEME: Record<string, RankTheme> = {
-  D: { gradient: 'linear-gradient(135deg, #9ca3af 0%, #6b7280 100%)', accent: '#9ca3af' },
-  C: { gradient: 'linear-gradient(135deg, #d08a52 0%, #9a5a2c 100%)', accent: '#d9975f' },
-  B: { gradient: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)', accent: '#60a5fa' },
-  A: { gradient: 'linear-gradient(135deg, #a78bfa 0%, #6d28d9 100%)', accent: '#a78bfa' },
-  S: { gradient: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', accent: '#fbbf24' },
-};
-const DEFAULT_THEME: RankTheme = RANK_THEME.D;
-
 // ── ◎○△ の表示（grade ラベルは definition 由来でスナップショットに無いため定数） ─
-//    ダーク背景で視認できる明るめの配色にする。
 const GRADE_DISPLAY: Record<DiagnosisGradeKey, { symbol: string; label: string; color: string }> = {
-  keep: { symbol: '◎', label: 'キープ', color: '#34d399' },
-  almost: { symbol: '○', label: 'あと少し', color: '#fbbf24' },
-  warn: { symbol: '△', label: '要注意', color: '#fb7185' },
+  keep: { symbol: '◎', label: 'キープ', color: '#2F9E6B' },
+  almost: { symbol: '○', label: 'あと少し', color: '#C08416' },
+  warn: { symbol: '△', label: '要注意', color: '#D2483F' },
 };
 
 // ── 汎用見出し・文言（definition 由来でスナップショットに無いため定数） ─────────
@@ -45,10 +35,14 @@ const EMPTY_STATE_MESSAGE =
   '今のあなたに、特に必要なケアは見つかりませんでした。この調子をキープしていきましょう。';
 const SOFT_CTA_TEXT = '気になるところがあれば、いつでも相談してくださいね。';
 const SOFT_CTA_SUBTEXT = 'まずは気軽にメッセージからどうぞ。';
-const MINOR_NOTICE = '18歳未満の方のご契約には保護者の同意が必要です。';
+/** 予約ボタンの既定文言（定義側 label があればそちらを使う）。 */
+const BOOKING_DEFAULT_LABEL = '予約する';
 
-// R1: 紙吹雪の汎用ビビッド配色（診断非依存）。
-const CONFETTI_COLORS = ['#7c5cff', '#ec4899', '#f59e0b', '#22d3ee', '#34d399', '#f43f5e'];
+/** 総合スコアの満点（エンジンが 0..100 整数で出す前提）。 */
+const SCORE_MAX = 100;
+
+// R1: 紙吹雪の汎用配色（診断非依存・紙面で視認できる濃さ）。
+const CONFETTI_COLORS = ['#D6A02A', '#4A78BE', '#8B74E0', '#C6864F', '#2F9E6B', '#D2483F'];
 
 // ── レーダー正規化ドメイン。軸ポイントは 1..5（shared の DiagnosisResult 準拠）。
 //    スナップショットに answerScale が無いためこの定数で正規化する。 ───────────
@@ -109,7 +103,7 @@ function useProgress(animate: boolean, duration = 600): number {
   return p;
 }
 
-// ── SVG 自前レーダー（軸数は axisScores.length に追従。grow で中心から展開） ─────
+// ── SVG 自前レーダー（塗りつぶしなしの線描。軸数は axisScores.length に追従） ────
 function RadarChart({
   axes,
   accent,
@@ -144,18 +138,23 @@ function RadarChart({
     .join(' ');
 
   return (
-    <svg viewBox={`0 0 ${size} ${size}`} className="w-full max-w-[300px] mx-auto block" role="img" aria-label="軸別スコアのレーダーチャート">
+    <svg
+      viewBox={`0 0 ${size} ${size}`}
+      className="dx-radar"
+      role="img"
+      aria-label="軸別スコアのレーダーチャート"
+    >
       {rings.map((level) => (
-        <polygon key={level} points={ringPoints(level)} fill="none" stroke="rgba(255,255,255,0.14)" strokeWidth={1} />
+        <polygon key={level} points={ringPoints(level)} fill="none" stroke="#DCE0E7" strokeWidth={1} />
       ))}
       {axes.map((_, i) => {
         const p = polar(cx, cy, r, angleFor(i));
-        return <line key={i} x1={cx} y1={cy} x2={p.x} y2={p.y} stroke="rgba(255,255,255,0.14)" strokeWidth={1} />;
+        return <line key={i} x1={cx} y1={cy} x2={p.x} y2={p.y} stroke="#DCE0E7" strokeWidth={1} />;
       })}
-      <polygon points={dataPoints} fill={accent} fillOpacity={0.28} stroke={accent} strokeWidth={2} strokeLinejoin="round" />
+      <polygon points={dataPoints} fill="none" stroke={accent} strokeWidth={2.5} strokeLinejoin="round" />
       {axes.map((a, i) => {
         const p = polar(cx, cy, r * norm(a.score), angleFor(i));
-        return <circle key={a.axisId} cx={p.x} cy={p.y} r={3} fill={accent} />;
+        return <circle key={a.axisId} cx={p.x} cy={p.y} r={3.5} fill={accent} />;
       })}
       {axes.map((a, i) => {
         const p = polar(cx, cy, r + 20, angleFor(i));
@@ -170,7 +169,7 @@ function RadarChart({
             dominantBaseline="middle"
             fontSize={12}
             fontWeight={700}
-            fill="#c7cdda"
+            fill="#5B6472"
           >
             {a.label}
           </text>
@@ -208,13 +207,17 @@ function Reveal({ animate, index = 0, children }: { animate: boolean; index?: nu
     return () => io.disconnect();
   }, [animate]);
   return (
-    <div ref={ref} className={animate ? `dx-reveal${shown ? ' dx-in' : ''}` : ''} style={animate ? { transitionDelay: `${index * 100}ms` } : undefined}>
+    <div
+      ref={ref}
+      className={animate ? `dx-reveal${shown ? ' dx-in' : ''}` : ''}
+      style={animate ? { transitionDelay: `${index * 100}ms` } : undefined}
+    >
       {children}
     </div>
   );
 }
 
-// ── R1: 紙吹雪（S/A のみ・約1.5秒・ループなし・自己撤去）。 ─────────────────────
+// ── R1: 紙吹雪（S/A のみ・約1.5秒・ループなし・角丸/発光なしの四角）。 ───────────
 function Confetti() {
   const pieces = useMemo(
     () =>
@@ -248,6 +251,71 @@ function Confetti() {
           }}
         />
       ))}
+    </div>
+  );
+}
+
+// ── I4: おすすめカードの価格表示 ──────────────────────────────────────────────
+// discount と割引後価格が両方あるときだけ二重価格表示にする。旧スナップショット
+// （discountedPriceInTax なし）は従来どおり税込価格1本で描画する（後方互換）。
+// 割引率・バッジ文言・条件文言はすべてスナップショット由来（コードに書かない）。
+function PriceBlock({
+  card,
+  discount,
+}: {
+  card: DiagnosisResultCard;
+  discount: DiagnosisResultDiscount | undefined;
+}) {
+  const suffix = card.priceSuffix === '＋' ? '〜' : '';
+  const discounted = typeof card.discountedPriceInTax === 'number' ? card.discountedPriceInTax : null;
+
+  if (!discount || discounted === null) {
+    return (
+      <div className="dx-reco-price dx-tnum">
+        ¥{card.priceInTax.toLocaleString()}
+        <span className="dx-reco-tax">(税込){suffix}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="dx-price">
+      <div className="dx-price-was">
+        <span className="dx-price-strike dx-tnum">通常 ¥{card.priceInTax.toLocaleString()}</span>
+        {discount.badgeLabel && <span className="dx-price-badge">{discount.badgeLabel}</span>}
+      </div>
+      <div className="dx-price-now dx-tnum">
+        ¥{discounted.toLocaleString()}
+        <span className="dx-price-tax">(税込){suffix}</span>
+      </div>
+      {/* 景表法（二重価格表示）: 割引条件を価格のすぐ直下にも明示する */}
+      {discount.conditionLabel && <p className="dx-price-cond">{discount.conditionLabel}</p>}
+    </div>
+  );
+}
+
+// ── I5: 予約導線。LINE 内ブラウザではなく外部ブラウザで開く。 ────────────────────
+function BookingBlock({ booking }: { booking: DiagnosisResultBooking }) {
+  function openBooking() {
+    try {
+      liff.openWindow({ url: booking.url, external: true });
+      return;
+    } catch {
+      // LIFF 外・未初期化などで使えない場合は通常の新規タブへフォールバック
+    }
+    try {
+      window.open(booking.url, '_blank', 'noopener');
+    } catch {
+      // 開けない環境では何もしない
+    }
+  }
+
+  return (
+    <div className="dx-booking">
+      {booking.subText && <p className="dx-booking-sub">{booking.subText}</p>}
+      <button onClick={openBooking} className="dx-booking-btn">
+        {booking.label || BOOKING_DEFAULT_LABEL}
+      </button>
     </div>
   );
 }
@@ -321,7 +389,7 @@ export default function DiagnosisResultView({
   shareUrl: string;
   submissionId: string;
 }) {
-  const theme = RANK_THEME[result.rank] ?? DEFAULT_THEME;
+  const accent = rankColor(result.rank);
 
   // 初回表示のみ演出する（同一 submission の再表示・reduced motion では静止表示）。
   const [animate] = useState(() => {
@@ -357,97 +425,116 @@ export default function DiagnosisResultView({
 
   const weakPointHeading = result.weakPointHeading ?? WEAK_POINT_HEADING;
   const softCta = result.softCta ?? { text: SOFT_CTA_TEXT, subText: SOFT_CTA_SUBTEXT };
-  const minorNotice = result.minorNotice ?? MINOR_NOTICE;
   const emptyStateTexts = result.emptyStateTexts ?? { message: EMPTY_STATE_MESSAGE };
+  // I4/I5: 割引・予約はスナップショットに載っているときだけ描画する（汎用フォールバックなし）。
+  const discount = result.discount;
+  const booking =
+    result.booking && typeof result.booking.url === 'string' && result.booking.url.startsWith('https://')
+      ? result.booking
+      : null;
 
   return (
     <div className="dx-result">
       {showConfetti && <Confetti />}
-      <div className="dx-wrap">
-        {result.diagnosisName && <p className="dx-name">{result.diagnosisName}</p>}
 
-        {/* 1. ヒーロー: キャラ画像 or ランク文字（R1/R6） */}
-        <section className="dx-hero">
-          <div className={`dx-hero-bg${animate ? ' dx-anim' : ''}`} style={{ background: theme.gradient }} />
-          {rankImageUrl ? (
-            <>
-              <img className={`dx-hero-img${animate ? ' dx-anim' : ''}`} src={rankImageUrl} alt={`ランク ${result.rank}`} />
-              <div className="dx-hero-rank" style={{ fontSize: '36px' }}>
-                {result.rank}
-              </div>
-            </>
-          ) : (
-            <div className={`dx-hero-rank${animate ? ' dx-anim' : ''}`}>{result.rank}</div>
-          )}
-          <div className="dx-hero-title">{result.rankTitle}</div>
-          <div className="dx-hero-score dx-tnum">あなたのスコアは {shownScore}点！</div>
-          {result.rankSubcopy && <p className="dx-hero-sub">{result.rankSubcopy}</p>}
-
-          {/* R5: ヒーロー直下のシェア導線 */}
-          <div className="dx-hero-share">
-            <button onClick={handleLineShare} className="dx-btn dx-btn-primary">
-              結果をシェアする
-            </button>
+      {/* 1. ヒーロー: ランク色の帯 + キャラ画像 or ランク文字（R1/R2/R6） */}
+      <header className="dx-band" style={{ background: accent }}>
+        <div className="dx-band-inner">
+          {result.diagnosisName && <p className="dx-band-eyebrow">{result.diagnosisName}</p>}
+          <h1 className={`dx-band-title dx-band-title-xl${animate ? ' dx-anim' : ''}`}>{result.rankTitle}</h1>
+          <p className="dx-band-rank">{result.rank}ランク</p>
+          <p className="dx-band-score dx-tnum">
+            {SCORE_MAX}点中 {shownScore}点
+          </p>
+        </div>
+        {rankImageUrl ? (
+          <div className="dx-figs dx-figs-solo">
+            <div className={`dx-fig${animate ? ' dx-anim' : ''}`} style={{ height: 'var(--dx-fig-h)' }}>
+              <span className="dx-fig-shadow" aria-hidden="true" />
+              <img className="dx-fig-img" src={rankImageUrl} alt="" aria-hidden="true" />
+            </div>
           </div>
+        ) : (
+          <div className={`dx-band-letter${animate ? ' dx-anim' : ''}`} aria-hidden="true">
+            {result.rank}
+          </div>
+        )}
+        <DiagnosisBandCurve />
+      </header>
+
+      <main className="dx-paper">
+        {result.rankSubcopy && <p className="dx-lead">{result.rankSubcopy}</p>}
+
+        {/* 2. 4軸の ◎○△ バッジ（2列グリッド） */}
+        <section className="dx-sec">
+          <ul className="dx-grid2">
+            {result.axisScores.map((a) => {
+              const g = GRADE_DISPLAY[a.grade];
+              return (
+                <li key={a.axisId} className="dx-gradecell">
+                  <span className="dx-gradecircle" style={{ background: g.color }} aria-hidden="true">
+                    {g.symbol}
+                  </span>
+                  <span className="dx-gradetexts">
+                    <span className="dx-gradeaxis">{a.label}</span>
+                    <span className="dx-gradename">{g.label}</span>
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
         </section>
 
-        {/* 2. レーダーチャート + ◎○△ 一覧（R3） */}
-        <section className="dx-section">
-          <div className="dx-card">
-            <div className="dx-radar-wrap">
-              <RadarChart axes={result.axisScores} accent={theme.accent} grow={radarGrow} />
-            </div>
-            <ul className="dx-grades">
-              {result.axisScores.map((a) => {
-                const g = GRADE_DISPLAY[a.grade];
-                return (
-                  <li key={a.axisId} className="dx-grade-row">
-                    <span className="dx-grade-label">{a.label}</span>
-                    <span className="dx-grade-right">
-                      <span className="dx-grade-tag" style={{ color: g.color }}>
-                        {g.symbol} {g.label}
-                      </span>
-                      <span className="dx-grade-score dx-tnum">{a.score.toFixed(1)}</span>
-                    </span>
-                  </li>
-                );
-              })}
+        {/* 3. レーダーチャート + 軸別数値（R3） */}
+        <section className="dx-sec">
+          <div className="dx-panel">
+            <RadarChart axes={result.axisScores} accent={accent} grow={radarGrow} />
+            <ul className="dx-axisrows">
+              {result.axisScores.map((a) => (
+                <li key={a.axisId} className="dx-axisrow">
+                  <span className="dx-axisrow-label">{a.label}</span>
+                  <span className="dx-axisrow-score dx-tnum">{a.score.toFixed(1)}</span>
+                </li>
+              ))}
             </ul>
           </div>
         </section>
 
-        {/* 3. 今いちばん効くポイント（△ 軸を弱点順に列挙・R4） */}
-        {weakPoints.length > 0 && (
-          <Reveal animate={animate}>
-            <section className="dx-section">
-              <h2 className="dx-h2">{weakPointHeading}</h2>
-              {weakPoints.map((w) => (
-                <div key={w.axisId} className="dx-weak">
-                  <div className="dx-weak-head">
-                    <span style={{ color: GRADE_DISPLAY.warn.color }}>{GRADE_DISPLAY.warn.symbol}</span>
-                    {w.label}
-                  </div>
-                  {w.text && <p className="dx-weak-text">{w.text}</p>}
-                </div>
-              ))}
-            </section>
-          </Reveal>
-        )}
-
         {/* 4. ランク別の結果文章（R4） */}
         {result.rankBody && (
           <Reveal animate={animate}>
-            <section className="dx-section">
+            <section className="dx-sec">
               <p className="dx-body-text">{result.rankBody}</p>
             </section>
           </Reveal>
         )}
 
-        {/* 5. あなたへのおすすめ（cards / axisMessages / emptyState・R4） */}
-        <section className="dx-section">
-          <h2 className="dx-h2">{RECOMMEND_HEADING}</h2>
+        {/* 5. 今いちばん効くポイント（△ 軸を弱点順に列挙・R4） */}
+        {weakPoints.length > 0 && (
+          <Reveal animate={animate}>
+            <section className="dx-sec">
+              <h2 className="dx-sec-h">{weakPointHeading}</h2>
+              <div className="dx-weaks">
+                {weakPoints.map((w) => (
+                  <div key={w.axisId} className="dx-weak">
+                    <div className="dx-weak-head">
+                      <span aria-hidden="true">{GRADE_DISPLAY.warn.symbol}</span>
+                      {w.label}
+                    </div>
+                    {w.text && <p className="dx-weak-text">{w.text}</p>}
+                  </div>
+                ))}
+              </div>
+            </section>
+          </Reveal>
+        )}
+
+        {/* 6. あなたへのおすすめ（cards / axisMessages / emptyState・R4） */}
+        <section className="dx-sec">
+          <h2 className="dx-sec-h">{RECOMMEND_HEADING}</h2>
+          {discount?.notice && <p className="dx-discount-notice">{discount.notice}</p>}
           {result.emptyState ? (
-            <div className="dx-empty">
+            <div className="dx-panel dx-empty">
               <p className="dx-empty-msg">{emptyStateTexts.message}</p>
               {emptyStateTexts.cta && <p className="dx-empty-cta">{emptyStateTexts.cta}</p>}
             </div>
@@ -462,9 +549,7 @@ export default function DiagnosisResultView({
                         <span className="dx-reco-extra">{card.extras.join('・')}もまとめてケア</span>
                       )}
                     </div>
-                    <div className="dx-reco-price dx-tnum">
-                      ¥{card.priceInTax.toLocaleString()}(税込){card.priceSuffix === '＋' ? '〜' : ''}
-                    </div>
+                    <PriceBlock card={card} discount={discount} />
                     {card.reason && <p className="dx-reco-reason">{card.reason}</p>}
                     {card.appeal && <p className="dx-reco-reason">{card.appeal}</p>}
                     {card.notes.length > 0 && (
@@ -488,28 +573,30 @@ export default function DiagnosisResultView({
           )}
         </section>
 
-        {/* 6. ソフトCTA（押し売り禁止） */}
-        <section className="dx-section">
+        {/* 7. 予約導線（I5・スナップショットに booking があるときだけ） */}
+        {booking && (
+          <section className="dx-sec">
+            <BookingBlock booking={booking} />
+          </section>
+        )}
+
+        {/* 8. ソフトCTA（押し売り禁止） */}
+        <section className="dx-sec">
           <div className="dx-softcta">
             <p className="dx-softcta-text">{softCta.text}</p>
             {softCta.subText && <p className="dx-softcta-sub">{softCta.subText}</p>}
           </div>
         </section>
+      </main>
 
-        {/* 7. 未成年向け注記 */}
-        <p className="dx-minor">{minorNotice}</p>
-      </div>
-
-      {/* 8. R5: 固定フッターのシェアバー（常時表示） */}
+      {/* 9. R5: 固定フッターのシェアバー（常時表示） */}
       <div className="dx-sharebar">
-        <div className="dx-sharebar-inner">
-          <button onClick={handleLineShare} className="dx-btn dx-btn-primary">
-            LINEでシェア
-          </button>
-          <button onClick={handleCopy} className="dx-btn dx-btn-ghost dx-share-copy">
-            リンクをコピー
-          </button>
-        </div>
+        <button onClick={handleLineShare} className="dx-cta">
+          結果をシェア
+        </button>
+        <button onClick={handleCopy} className="dx-cta dx-cta-ghost">
+          リンクをコピー
+        </button>
       </div>
       {notice && <div className="dx-notice">{notice}</div>}
     </div>

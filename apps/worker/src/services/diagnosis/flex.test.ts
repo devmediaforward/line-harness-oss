@@ -102,6 +102,119 @@ describe('buildResultFlex', () => {
     expect(uBubble.body.contents[0].color).toBe('#9CA3AF');
   });
 
+  test('I5: booking ありで footer 3ボタン・先頭が予約(緑 primary)', () => {
+    const flex = buildResultFlex({
+      result: makeResult({
+        booking: { url: 'https://booking.example.com/reserve', label: 'このメニューを予約する' },
+      }),
+      diagnosisName: '清潔感診断',
+      liffResultUrl: 'https://liff.line.me/x/diagnosis/result/s',
+      shareUrl: 'https://worker.example.com/d/t',
+    });
+    const bubble = flex.contents as {
+      footer: {
+        contents: Array<{ style?: string; color?: string; action?: { label?: string; uri?: string } }>;
+      };
+    };
+    expect(bubble.footer.contents).toHaveLength(3);
+    expect(bubble.footer.contents[0].style).toBe('primary');
+    expect(bubble.footer.contents[0].color).toBe('#06C755');
+    expect(bubble.footer.contents[0].action?.label).toBe('このメニューを予約する');
+    expect(bubble.footer.contents[0].action?.uri).toBe('https://booking.example.com/reserve');
+    // 「結果をくわしく見る」は secondary の2番手へ
+    expect(bubble.footer.contents[1].style).toBe('secondary');
+    expect(bubble.footer.contents[1].action?.label).toBe('結果をくわしく見る');
+    expect(bubble.footer.contents[2].action?.label).toBe('友だちにシェアする');
+  });
+
+  test('I5: booking の label 未指定なら汎用既定文言「予約する」', () => {
+    const flex = buildResultFlex({
+      result: makeResult({ booking: { url: 'https://booking.example.com/reserve' } }),
+      diagnosisName: '清潔感診断',
+      liffResultUrl: 'https://liff.line.me/x/diagnosis/result/s',
+      shareUrl: '',
+    });
+    const bubble = flex.contents as { footer: { contents: Array<{ action?: { label?: string } }> } };
+    expect(bubble.footer.contents).toHaveLength(2);
+    expect(bubble.footer.contents[0].action?.label).toBe('予約する');
+  });
+
+  test('I5: booking.url が https 以外なら予約ボタンを出さない(多層防御)', () => {
+    for (const url of [
+      'javascript:alert(1)',
+      'http://booking.example.com/reserve',
+      'data:text/html,<script></script>',
+      'https://',
+      '',
+    ]) {
+      const flex = buildResultFlex({
+        result: makeResult({ booking: { url } }),
+        diagnosisName: '清潔感診断',
+        liffResultUrl: 'https://liff.line.me/x/diagnosis/result/s',
+        shareUrl: 'https://worker.example.com/d/t',
+      });
+      const bubble = flex.contents as {
+        footer: { contents: Array<{ action?: { label?: string } }> };
+      };
+      // 従来どおりの2ボタン構成に戻り、予約ボタン自体が出ない
+      expect(bubble.footer.contents).toHaveLength(2);
+      expect(bubble.footer.contents[0].action?.label).toBe('結果をくわしく見る');
+      expect(bubble.footer.contents[1].action?.label).toBe('友だちにシェアする');
+      const serialized = JSON.stringify(flex);
+      expect(serialized).not.toContain('javascript:');
+      expect(serialized).not.toContain('data:');
+      expect(serialized).not.toContain('booking.example.com');
+    }
+  });
+
+  test('I5: booking なしなら従来どおり2ボタン(先頭は primary の結果ボタン)', () => {
+    const flex = buildResultFlex({
+      result: makeResult(),
+      diagnosisName: '清潔感診断',
+      liffResultUrl: 'https://liff.line.me/x/diagnosis/result/s',
+      shareUrl: 'https://worker.example.com/d/t',
+    });
+    const bubble = flex.contents as {
+      footer: {
+        contents: Array<{ style?: string; color?: string; action?: { label?: string } }>;
+      };
+    };
+    expect(bubble.footer.contents).toHaveLength(2);
+    expect(bubble.footer.contents[0].style).toBe('primary');
+    expect(bubble.footer.contents[0].color).toBe('#06C755');
+    expect(bubble.footer.contents[0].action?.label).toBe('結果をくわしく見る');
+    expect(bubble.footer.contents[1].action?.label).toBe('友だちにシェアする');
+  });
+
+  test('I5: booking があっても価格は Flex に載せない', () => {
+    const flex = buildResultFlex({
+      result: makeResult({
+        cards: [
+          {
+            axisId: 'body',
+            title: '上半身セット',
+            priceExTax: 15000,
+            priceInTax: 16500,
+            priceSuffix: '',
+            reason: 'r',
+            extras: [],
+            notes: [],
+            discountedPriceInTax: 9900,
+          },
+        ],
+        discount: { rate: 0.4, badgeLabel: '40%OFF' },
+        booking: { url: 'https://booking.example.com/reserve' },
+      }),
+      diagnosisName: '清潔感診断',
+      liffResultUrl: 'https://liff.line.me/x/diagnosis/result/s',
+      shareUrl: 'https://worker.example.com/d/t',
+    });
+    const serialized = JSON.stringify(flex);
+    expect(serialized).not.toContain('16500');
+    expect(serialized).not.toContain('9900');
+    expect(serialized).not.toContain('40%OFF');
+  });
+
   test('メニュー・価格を載せない(cards があっても Flex に漏れない)', () => {
     const flex = buildResultFlex({
       result: makeResult({

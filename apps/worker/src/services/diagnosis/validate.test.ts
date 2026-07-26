@@ -395,6 +395,204 @@ describe('validateDefinition — F1〜F6 追加検査', () => {
     expect(errors.some((e: string) => e.includes('rankImages'))).toBe(true);
   });
 
+  it('価格: lookup table の priceExTax が負 / 非有限 → エラー', () => {
+    for (const bad of [-1, Number.NaN, Number.POSITIVE_INFINITY]) {
+      const def = clone();
+      def.recommendation.resolvers.body.table[0].priceExTax = bad;
+      const errors = validateDefinition(def);
+      expect(errors.some((e: string) => e.includes('priceExTax'))).toBe(true);
+    }
+  });
+
+  it('価格: priorityRules の card.priceExTax が負 → エラー', () => {
+    const def = clone();
+    const rules = def.recommendation.resolvers.skin.rules;
+    const target = rules.find((r: any) => r.card) ?? rules[0];
+    target.card = { title: 'T', priceExTax: -100, reason: 'r' };
+    const errors = validateDefinition(def);
+    expect(errors.some((e: string) => e.includes('priceExTax'))).toBe(true);
+  });
+
+  it('税率: taxRate が負 / 1超 / 非有限 → エラー', () => {
+    for (const bad of [-0.1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+      const def = clone();
+      def.resultPage.taxRate = bad;
+      const errors = validateDefinition(def);
+      expect(errors.some((e: string) => e.includes('taxRate'))).toBe(true);
+    }
+  });
+
+  it('税率: 境界値 0 と 1 は許容', () => {
+    for (const ok of [0, 1]) {
+      const def = clone();
+      def.resultPage.taxRate = ok;
+      expect(validateDefinition(def).some((e: string) => e.includes('taxRate'))).toBe(false);
+    }
+  });
+
+  it('価格: 0 円は許容(無料メニュー)', () => {
+    const def = clone();
+    def.recommendation.resolvers.body.table[0].priceExTax = 0;
+    expect(validateDefinition(def).some((e: string) => e.includes('priceExTax'))).toBe(false);
+  });
+
+  it('I4: discount 正常系(rate + ラベル類)→ エラーなし', () => {
+    const def = clone();
+    def.resultPage.discount = { rate: 0.4, badgeLabel: 'B', conditionLabel: 'C', notice: 'N' };
+    expect(validateDefinition(def)).toEqual([]);
+  });
+
+  it('I4: discount.rate が範囲外(0 / 1 / 負 / 1超)→ エラー', () => {
+    for (const rate of [0, 1, -0.1, 1.2]) {
+      const def = clone();
+      def.resultPage.discount = { rate };
+      const errors = validateDefinition(def);
+      expect(errors.some((e: string) => e.includes('discount.rate'))).toBe(true);
+    }
+  });
+
+  it('I4: discount.rate が数値でない → エラー', () => {
+    const def = clone();
+    def.resultPage.discount = { rate: '0.4' };
+    expect(validateDefinition(def).some((e: string) => e.includes('discount.rate'))).toBe(true);
+  });
+
+  it('I4: discount のラベル類が文字列でない → エラー', () => {
+    const def = clone();
+    def.resultPage.discount = { rate: 0.4, badgeLabel: 1, conditionLabel: 2, notice: 3 };
+    const errors = validateDefinition(def);
+    expect(errors.some((e: string) => e.includes('discount.badgeLabel'))).toBe(true);
+    expect(errors.some((e: string) => e.includes('discount.conditionLabel'))).toBe(true);
+    expect(errors.some((e: string) => e.includes('discount.notice'))).toBe(true);
+  });
+
+  it('I4: discount がオブジェクトでない → エラー', () => {
+    const def = clone();
+    def.resultPage.discount = 0.4;
+    expect(validateDefinition(def).some((e: string) => e.includes('resultPage.discount'))).toBe(true);
+  });
+
+  it('I5: booking 正常系(https URL + ラベル類)→ エラーなし', () => {
+    const def = clone();
+    def.resultPage.booking = { url: 'https://booking.example.com/x', label: 'L', subText: 'S' };
+    expect(validateDefinition(def)).toEqual([]);
+  });
+
+  it('I5: booking.url が https:// でない → エラー', () => {
+    const def = clone();
+    def.resultPage.booking = { url: 'http://booking.example.com/x' };
+    const errors = validateDefinition(def);
+    expect(errors.some((e: string) => e.includes('booking.url') && e.includes('https://'))).toBe(true);
+  });
+
+  it('I5: booking.url が欠落 → エラー', () => {
+    const def = clone();
+    def.resultPage.booking = { label: 'L' };
+    expect(validateDefinition(def).some((e: string) => e.includes('booking.url'))).toBe(true);
+  });
+
+  it('I5: booking の label / subText が文字列でない → エラー', () => {
+    const def = clone();
+    def.resultPage.booking = { url: 'https://booking.example.com/x', label: 1, subText: 2 };
+    const errors = validateDefinition(def);
+    expect(errors.some((e: string) => e.includes('booking.label'))).toBe(true);
+    expect(errors.some((e: string) => e.includes('booking.subText'))).toBe(true);
+  });
+
+  it('I5: booking がオブジェクトでない → エラー', () => {
+    const def = clone();
+    def.resultPage.booking = 'https://booking.example.com/x';
+    expect(validateDefinition(def).some((e: string) => e.includes('resultPage.booking'))).toBe(true);
+  });
+
+  it('intro 正常系(全フィールド)→ エラーなし', () => {
+    const def = clone();
+    def.intro = {
+      catchCopy: 'コピー',
+      subCopy: 'サブ',
+      aboutLines: ['行1', '行2'],
+      rankPreview: [
+        { rank: 'D', title: 'T-D', subcopy: 'S-D', minScore: 0, imageUrl: 'https://cdn.example.com/d.webp' },
+        { rank: 'S', title: 'T-S', minScore: 80 },
+      ],
+      heroImages: { D: 'https://cdn.example.com/d.webp', S: 'https://cdn.example.com/s.webp' },
+    };
+    expect(validateDefinition(def)).toEqual([]);
+  });
+
+  it('intro 未指定 → エラーなし(任意ブロック)', () => {
+    const def = clone();
+    delete def.intro;
+    expect(validateDefinition(def)).toEqual([]);
+  });
+
+  it('intro がオブジェクトでない → エラー', () => {
+    const def = clone();
+    def.intro = 'nope';
+    expect(validateDefinition(def).some((e: string) => e.includes('intro'))).toBe(true);
+  });
+
+  it('intro.aboutLines が文字列配列でない → エラー', () => {
+    const def = clone();
+    def.intro = { aboutLines: ['ok', 3] };
+    const errors = validateDefinition(def);
+    expect(errors.some((e: string) => e.includes('intro.aboutLines'))).toBe(true);
+  });
+
+  it('intro.catchCopy が文字列でない → エラー', () => {
+    const def = clone();
+    def.intro = { catchCopy: 1 };
+    expect(validateDefinition(def).some((e: string) => e.includes('intro.catchCopy'))).toBe(true);
+  });
+
+  it('intro.rankPreview が配列でない → エラー', () => {
+    const def = clone();
+    def.intro = { rankPreview: {} };
+    expect(validateDefinition(def).some((e: string) => e.includes('intro.rankPreview'))).toBe(true);
+  });
+
+  it('intro.rankPreview の rank が未知ランク → エラー', () => {
+    const def = clone();
+    def.intro = { rankPreview: [{ rank: 'Z', title: 'T' }] };
+    const errors = validateDefinition(def);
+    expect(errors.some((e: string) => e.includes('rankPreview[0].rank') && e.includes('存在しません'))).toBe(true);
+  });
+
+  it('intro.rankPreview の title 欠落 / minScore 型不正 → エラー', () => {
+    const def = clone();
+    def.intro = { rankPreview: [{ rank: 'S', minScore: '80' }] };
+    const errors = validateDefinition(def);
+    expect(errors.some((e: string) => e.includes('rankPreview[0].title'))).toBe(true);
+    expect(errors.some((e: string) => e.includes('rankPreview[0].minScore'))).toBe(true);
+  });
+
+  it('intro.rankPreview の imageUrl が https:// でない → エラー', () => {
+    const def = clone();
+    def.intro = { rankPreview: [{ rank: 'S', title: 'T', imageUrl: 'http://cdn.example.com/s.webp' }] };
+    const errors = validateDefinition(def);
+    expect(errors.some((e: string) => e.includes('rankPreview[0].imageUrl') && e.includes('https://'))).toBe(true);
+  });
+
+  it('intro.heroImages のキーが未知ランク → エラー', () => {
+    const def = clone();
+    def.intro = { heroImages: { Z: 'https://cdn.example.com/z.webp' } };
+    const errors = validateDefinition(def);
+    expect(errors.some((e: string) => e.includes('intro.heroImages') && e.includes('存在しません'))).toBe(true);
+  });
+
+  it('intro.heroImages の値が https:// でない → エラー', () => {
+    const def = clone();
+    def.intro = { heroImages: { S: 'ftp://cdn.example.com/s.webp' } };
+    const errors = validateDefinition(def);
+    expect(errors.some((e: string) => e.includes('intro.heroImages') && e.includes('https://'))).toBe(true);
+  });
+
+  it('intro.heroImages がオブジェクトでない → エラー', () => {
+    const def = clone();
+    def.intro = { heroImages: [] };
+    expect(validateDefinition(def).some((e: string) => e.includes('intro.heroImages'))).toBe(true);
+  });
+
   it('F4: スペース入りタグの lookup で誤った重複検出が起きない', () => {
     // keyTags ["a","b","a b"]。名前連結方式だと {a,b} と {a b} が衝突するが
     // インデックス連結では別物。重複エラーが出ないことを確認(網羅不足エラーは別途出る)。

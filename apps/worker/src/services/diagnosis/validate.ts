@@ -11,6 +11,7 @@
 // =============================================================================
 
 import { keyTagSignature } from './signature.js';
+import { isHttpsUrl } from './url.js';
 
 type Obj = Record<string, unknown>;
 
@@ -31,15 +32,9 @@ function isInteger(v: unknown): v is number {
   return typeof v === 'number' && Number.isInteger(v);
 }
 
-/** https スキームかつホスト付きの絶対URLか(rankImages 用。壊れURLを弾く)。 */
-function isHttpsUrl(v: unknown): boolean {
-  if (typeof v !== 'string') return false;
-  try {
-    const u = new URL(v);
-    return u.protocol === 'https:' && u.hostname !== '';
-  } catch {
-    return false;
-  }
+/** 価格として妥当か(有限かつ非負)。負の価格は割引表示で破綻するため弾く。 */
+function isNonNegativeFinite(v: unknown): v is number {
+  return typeof v === 'number' && Number.isFinite(v) && v >= 0;
 }
 
 const KNOWN_CONDITION_KEYS = new Set([
@@ -68,7 +63,9 @@ function validateCard(card: unknown, path: string, errors: string[], allowNull: 
     return;
   }
   if (typeof card.title !== 'string') errors.push(`${path}.title は文字列である必要があります`);
-  if (typeof card.priceExTax !== 'number') errors.push(`${path}.priceExTax は数値である必要があります`);
+  if (!isNonNegativeFinite(card.priceExTax)) {
+    errors.push(`${path}.priceExTax は 0 以上の有限な数値である必要があります`);
+  }
   if (typeof card.reason !== 'string') errors.push(`${path}.reason は文字列である必要があります`);
   if ('priceSuffix' in card && typeof card.priceSuffix !== 'string') {
     errors.push(`${path}.priceSuffix は文字列である必要があります`);
@@ -212,8 +209,8 @@ function validateLookupResolver(
     if (typeof rowRaw.title !== 'string') {
       errors.push(`リゾルバ[${axisId}] の table 行の title が文字列ではありません`);
     }
-    if (typeof rowRaw.priceExTax !== 'number') {
-      errors.push(`リゾルバ[${axisId}] の table 行の priceExTax が数値ではありません`);
+    if (!isNonNegativeFinite(rowRaw.priceExTax)) {
+      errors.push(`リゾルバ[${axisId}] の table 行の priceExTax が 0 以上の有限な数値ではありません`);
     }
     if (!isStringArray(rowRaw.extras)) {
       errors.push(`リゾルバ[${axisId}] の table 行の extras が文字列配列ではありません`);
@@ -570,8 +567,9 @@ function runValidation(input: unknown): string[] {
     errors.push('resultPage がオブジェクトではありません');
   } else if (isObj(def.resultPage)) {
     const rp = def.resultPage;
-    if (typeof rp.taxRate !== 'number') {
-      errors.push('resultPage.taxRate が数値ではありません');
+    // 税率は 0(非課税)〜1(100%)。範囲外は税込価格・割引後価格が破綻するため弾く。
+    if (typeof rp.taxRate !== 'number' || !Number.isFinite(rp.taxRate) || rp.taxRate < 0 || rp.taxRate > 1) {
+      errors.push('resultPage.taxRate は 0 以上 1 以下の有限な数値である必要があります');
     }
     if ('weakPointHeading' in rp && typeof rp.weakPointHeading !== 'string') {
       errors.push('resultPage.weakPointHeading は文字列である必要があります');
@@ -614,6 +612,38 @@ function runValidation(input: unknown): string[] {
         }
       }
     }
+    // I4: discount(任意)。rate は 0 < rate < 1 の数値、ラベル類は文字列。
+    if ('discount' in rp) {
+      if (!isObj(rp.discount)) {
+        errors.push('resultPage.discount はオブジェクトである必要があります');
+      } else {
+        const dc = rp.discount;
+        if (typeof dc.rate !== 'number' || !(dc.rate > 0 && dc.rate < 1)) {
+          errors.push('resultPage.discount.rate は 0 より大きく 1 より小さい数値である必要があります');
+        }
+        for (const field of ['badgeLabel', 'conditionLabel', 'notice'] as const) {
+          if (field in dc && typeof dc[field] !== 'string') {
+            errors.push(`resultPage.discount.${field} は文字列である必要があります`);
+          }
+        }
+      }
+    }
+    // I5: booking(任意)。url は https:// のURL、ラベル類は文字列。
+    if ('booking' in rp) {
+      if (!isObj(rp.booking)) {
+        errors.push('resultPage.booking はオブジェクトである必要があります');
+      } else {
+        const bk = rp.booking;
+        if (!isHttpsUrl(bk.url)) {
+          errors.push('resultPage.booking.url は https:// のURL(ホスト付き)である必要があります');
+        }
+        for (const field of ['label', 'subText'] as const) {
+          if (field in bk && typeof bk[field] !== 'string') {
+            errors.push(`resultPage.booking.${field} は文字列である必要があります`);
+          }
+        }
+      }
+    }
     // R6: rankImages(任意)。オブジェクトで、キーは定義済みランク・値は https:// URL。
     if ('rankImages' in rp) {
       if (!isObj(rp.rankImages)) {
@@ -625,6 +655,69 @@ function runValidation(input: unknown): string[] {
           }
           if (!isHttpsUrl(url)) {
             errors.push(`resultPage.rankImages["${rank}"] は https:// のURL(ホスト付き)である必要があります`);
+          }
+        }
+      }
+    }
+  }
+
+  // ── intro(任意) ─────────────────────────────────────────────────────────
+  // 診断前画面の表示内容。LIFF 定義APIがそのまま返すブロックのため、価格・配点は
+  // 持たない前提でキー単位に型検査する(未知キーは無視)。
+  if ('intro' in def) {
+    if (!isObj(def.intro)) {
+      errors.push('intro はオブジェクトである必要があります');
+    } else {
+      const intro = def.intro;
+      for (const field of ['catchCopy', 'subCopy'] as const) {
+        if (field in intro && typeof intro[field] !== 'string') {
+          errors.push(`intro.${field} は文字列である必要があります`);
+        }
+      }
+      if ('aboutLines' in intro && !isStringArray(intro.aboutLines)) {
+        errors.push('intro.aboutLines は文字列配列である必要があります');
+      }
+      if ('rankPreview' in intro) {
+        if (!Array.isArray(intro.rankPreview)) {
+          errors.push('intro.rankPreview は配列である必要があります');
+        } else {
+          intro.rankPreview.forEach((rowRaw, i) => {
+            const base = `intro.rankPreview[${i}]`;
+            if (!isObj(rowRaw)) {
+              errors.push(`${base} がオブジェクトではありません`);
+              return;
+            }
+            if (typeof rowRaw.rank !== 'string') {
+              errors.push(`${base}.rank は文字列である必要があります`);
+            } else if (!definedRanks.has(rowRaw.rank)) {
+              errors.push(`${base}.rank "${rowRaw.rank}" が scoring.ranks に存在しません`);
+            }
+            if (typeof rowRaw.title !== 'string') {
+              errors.push(`${base}.title は文字列である必要があります`);
+            }
+            if ('subcopy' in rowRaw && typeof rowRaw.subcopy !== 'string') {
+              errors.push(`${base}.subcopy は文字列である必要があります`);
+            }
+            if ('minScore' in rowRaw && typeof rowRaw.minScore !== 'number') {
+              errors.push(`${base}.minScore は数値である必要があります`);
+            }
+            if ('imageUrl' in rowRaw && !isHttpsUrl(rowRaw.imageUrl)) {
+              errors.push(`${base}.imageUrl は https:// のURL(ホスト付き)である必要があります`);
+            }
+          });
+        }
+      }
+      if ('heroImages' in intro) {
+        if (!isObj(intro.heroImages)) {
+          errors.push('intro.heroImages はオブジェクトである必要があります');
+        } else {
+          for (const [rank, url] of Object.entries(intro.heroImages)) {
+            if (!definedRanks.has(rank)) {
+              errors.push(`intro.heroImages のキー "${rank}" が scoring.ranks に存在しません`);
+            }
+            if (!isHttpsUrl(url)) {
+              errors.push(`intro.heroImages["${rank}"] は https:// のURL(ホスト付き)である必要があります`);
+            }
           }
         }
       }

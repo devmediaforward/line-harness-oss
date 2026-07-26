@@ -197,6 +197,31 @@ export interface DiagnosisEmptyState {
   cta: string;
 }
 
+/**
+ * おすすめカードの割引表示(任意)。割引率も文言も定義JSON側に置く。
+ * 二重価格表示のため conditionLabel を各価格の直下に出す(景表法配慮)。
+ */
+export interface DiagnosisDiscount {
+  /** 割引率。0 < rate < 1 */
+  rate: number;
+  /** 「NN%OFF」等のバッジ文言 */
+  badgeLabel?: string;
+  /** 各価格の直下に出す適用条件 */
+  conditionLabel?: string;
+  /** おすすめセクション冒頭に出す注記 */
+  notice?: string;
+}
+
+/** 結果ページ・Flex から開く予約導線(任意)。 */
+export interface DiagnosisBooking {
+  /** 予約先URL。https:// のみ */
+  url: string;
+  /** ボタン文言(無ければ表示側の汎用既定文言) */
+  label?: string;
+  /** ボタンに添える一言 */
+  subText?: string;
+}
+
 export interface DiagnosisResultPage {
   /** 税込価格 = round(priceExTax * (1+taxRate)) */
   taxRate: number;
@@ -208,6 +233,10 @@ export interface DiagnosisResultPage {
   emptyState: DiagnosisEmptyState;
   /** rank -> ランク別キャラクター画像URL(任意)。https:// のみ。結果ヒーローの主役 */
   rankImages?: Record<string, string>;
+  /** おすすめカードの割引表示(任意) */
+  discount?: DiagnosisDiscount;
+  /** 予約導線(任意) */
+  booking?: DiagnosisBooking;
 }
 
 export interface DiagnosisShare {
@@ -228,6 +257,42 @@ export interface DiagnosisSideEffects {
   saveToMetadata: boolean;
 }
 
+// -----------------------------------------------------------------------------
+// 診断前(イントロ)画面
+// -----------------------------------------------------------------------------
+
+/** イントロのランク紹介1件。価格・配点は載せない(LIFF に露出するため)。 */
+export interface DiagnosisIntroRankPreview {
+  /** scoring.ranks に存在するランク名 */
+  rank: string;
+  title: string;
+  subcopy?: string;
+  /**
+   * 診断前画面に「NN点以上」と表示するためのランク閾値(scoring.ranks[].min と同値)。
+   * 設問ごとの配点ではないため LIFF に露出してよい(価格戦略・採点ロジックを含まない)。
+   */
+  minScore?: number;
+  /** ランク紹介行のキャラ画像URL。https:// のみ */
+  imageUrl?: string;
+}
+
+/**
+ * 診断前画面の表示内容(任意)。LIFF 定義API がそのまま返すため、
+ * 価格・配点・推奨ロジックに関わる値は絶対に入れないこと。
+ */
+export interface DiagnosisIntro {
+  /** 無ければ meta.name */
+  catchCopy?: string;
+  /** 無ければ meta.description */
+  subCopy?: string;
+  /** 「この診断について」の本文行 */
+  aboutLines?: string[];
+  /** ランク紹介(降順表示はビュー側で行う) */
+  rankPreview?: DiagnosisIntroRankPreview[];
+  /** rank -> 透過キャラ画像URL(ヒーロー用)。https:// のみ */
+  heroImages?: Record<string, string>;
+}
+
 /** diagnoses.definition に格納する定義JSON全体 */
 export interface DiagnosisDefinition {
   meta: DiagnosisMeta;
@@ -239,6 +304,8 @@ export interface DiagnosisDefinition {
   resultPage: DiagnosisResultPage;
   share: DiagnosisShare;
   sideEffects: DiagnosisSideEffects;
+  /** 診断前画面の表示内容(任意)。LIFF 定義APIで返す唯一の追加ブロック */
+  intro?: DiagnosisIntro;
 }
 
 // -----------------------------------------------------------------------------
@@ -281,6 +348,8 @@ export interface ResultCard {
   notes: string[];
   /** 自己処理トラブル訴求文(該当時のみ) */
   appeal?: string;
+  /** 割引後の税込価格 = floor(priceInTax * (1 - discount.rate))。discount 未設定なら省略 */
+  discountedPriceInTax?: number;
 }
 
 export interface ResultAxisMessage {
@@ -352,4 +421,8 @@ export interface DiagnosisResult {
   emptyStateTexts?: ResultEmptyStateTexts;
   /** 該当ランクのキャラクター画像URL(resultPage.rankImages[rank]。無ければ省略) */
   rankImageUrl?: string;
+  /** 割引表示の設定(resultPage.discount)。cards[].discountedPriceInTax と対で使う */
+  discount?: DiagnosisDiscount;
+  /** 予約導線(resultPage.booking)。結果ページ・Flex はこれだけを見る */
+  booking?: DiagnosisBooking;
 }

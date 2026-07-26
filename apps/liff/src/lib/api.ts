@@ -148,12 +148,33 @@ export interface DiagnosisQuestion {
   worryTag: string | null;
 }
 
+/** intro.rankPreview の1件（価格・配点は含まない）。 */
+export interface DiagnosisIntroRankPreview {
+  rank: string;
+  title: string;
+  subcopy?: string;
+  /** ランク到達に必要な点数（表示用の閾値。設問ごとの配点ではない） */
+  minScore?: number;
+  imageUrl?: string;
+}
+
+/** 診断前画面の表示内容（定義JSON の intro ブロック・任意）。 */
+export interface DiagnosisIntro {
+  catchCopy?: string;
+  subCopy?: string;
+  aboutLines?: string[];
+  rankPreview?: DiagnosisIntroRankPreview[];
+  /** rank -> 透過キャラ画像URL（ヒーロー用） */
+  heroImages?: Record<string, string>;
+}
+
 /** GET /api/liff/diagnoses/:slug のレスポンス（採点・価格戦略は含まない）。 */
 export interface DiagnosisDefinitionForLiff {
   meta: DiagnosisMeta;
   axes: DiagnosisAxis[];
   answerScale: DiagnosisAnswerScale;
   questions: DiagnosisQuestion[];
+  intro?: DiagnosisIntro;
 }
 
 export type DiagnosisGradeKey = 'keep' | 'almost' | 'warn';
@@ -181,6 +202,23 @@ export interface DiagnosisResultCard {
   extras: string[];
   notes: string[];
   appeal?: string;
+  /** 割引後の税込価格（定義に discount がある場合のみ焼き込まれる） */
+  discountedPriceInTax?: number;
+}
+
+/** おすすめカードの割引表示設定（definition.resultPage.discount のスナップショット）。 */
+export interface DiagnosisResultDiscount {
+  rate: number;
+  badgeLabel?: string;
+  conditionLabel?: string;
+  notice?: string;
+}
+
+/** 予約導線（definition.resultPage.booking のスナップショット）。 */
+export interface DiagnosisResultBooking {
+  url: string;
+  label?: string;
+  subText?: string;
 }
 
 export interface DiagnosisResultAxisMessage {
@@ -218,6 +256,10 @@ export interface DiagnosisResult {
   emptyStateTexts?: { message: string; cta?: string };
   /** 該当ランクのキャラクター画像URL（R6・任意。https:// のみ）。 */
   rankImageUrl?: string;
+  /** 割引表示の設定（I4・任意）。cards[].discountedPriceInTax と対で使う。 */
+  discount?: DiagnosisResultDiscount;
+  /** 予約導線（I5・任意）。 */
+  booking?: DiagnosisResultBooking;
 }
 
 /** POST submissions / GET submissions/:sid の共通レスポンス。 */

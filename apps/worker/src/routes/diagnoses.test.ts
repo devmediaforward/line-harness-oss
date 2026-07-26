@@ -452,6 +452,90 @@ describe('GET /api/liff/diagnoses/:slug', () => {
     expect(json.sideEffects).toBeUndefined();
   });
 
+  test('intro があれば返す(価格・配点は含まない)', async () => {
+    const intro = {
+      catchCopy: 'コピー',
+      subCopy: 'サブ',
+      aboutLines: ['行1'],
+      rankPreview: [{ rank: 'S', title: 'T-S', minScore: 80 }],
+      heroImages: { S: 'https://cdn.example.com/s.webp' },
+    };
+    dbMocks.getDiagnosisBySlug.mockResolvedValue(
+      makeDiagRow({ definition: JSON.stringify({ ...redentDef, intro }) }),
+    );
+    const res = await req('GET', '/api/liff/diagnoses/redent-cleanliness');
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as Record<string, unknown>;
+    expect(json.intro).toEqual(intro);
+    // intro を返しても価格戦略ブロックは秘匿されたまま
+    expect(json.recommendation).toBeUndefined();
+    expect(json.scoring).toBeUndefined();
+    expect(json.resultPage).toBeUndefined();
+    expect(json.share).toBeUndefined();
+    expect(json.sideEffects).toBeUndefined();
+  });
+
+  test('intro の未知フィールドは応答に含めない(許可フィールドのみ再構築)', async () => {
+    const intro = {
+      catchCopy: 'コピー',
+      subCopy: 'サブ',
+      aboutLines: ['行1', 42],
+      rankPreview: [
+        {
+          rank: 'S',
+          title: 'T-S',
+          minScore: 80,
+          imageUrl: 'https://cdn.example.com/s.webp',
+          costPrice: 1234, // 未知キー(原価)
+        },
+        { rank: 'A' }, // title 欠落 → 行ごと落とす
+      ],
+      heroImages: { S: 'https://cdn.example.com/s.webp', A: 'javascript:alert(1)' },
+      questionWeights: { T1: 5 }, // 未知キー(配点)
+      secretMargin: 0.7, // 未知キー
+    };
+    dbMocks.getDiagnosisBySlug.mockResolvedValue(
+      makeDiagRow({ definition: JSON.stringify({ ...redentDef, intro }) }),
+    );
+    const res = await req('GET', '/api/liff/diagnoses/redent-cleanliness');
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as Record<string, unknown>;
+    expect(json.intro).toEqual({
+      catchCopy: 'コピー',
+      subCopy: 'サブ',
+      aboutLines: ['行1'], // 非文字列は除去
+      rankPreview: [
+        { rank: 'S', title: 'T-S', minScore: 80, imageUrl: 'https://cdn.example.com/s.webp' },
+      ],
+      heroImages: { S: 'https://cdn.example.com/s.webp' }, // 非https は除去
+    });
+    // 未知キーが応答のどこにも漏れていないこと
+    const body = JSON.stringify(json);
+    expect(body).not.toContain('costPrice');
+    expect(body).not.toContain('questionWeights');
+    expect(body).not.toContain('secretMargin');
+    expect(body).not.toContain('javascript:');
+  });
+
+  test('intro が配列・文字列などオブジェクトでない場合はキーを省略', async () => {
+    for (const bad of ['nope', [1, 2], 42]) {
+      dbMocks.getDiagnosisBySlug.mockResolvedValue(
+        makeDiagRow({ definition: JSON.stringify({ ...redentDef, intro: bad }) }),
+      );
+      const res = await req('GET', '/api/liff/diagnoses/redent-cleanliness');
+      const json = (await res.json()) as Record<string, unknown>;
+      expect('intro' in json).toBe(false);
+    }
+  });
+
+  test('intro が無い定義ではキー自体を省略する', async () => {
+    dbMocks.getDiagnosisBySlug.mockResolvedValue(makeDiagRow());
+    const res = await req('GET', '/api/liff/diagnoses/redent-cleanliness');
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as Record<string, unknown>;
+    expect('intro' in json).toBe(false);
+  });
+
   test('inactive は 404', async () => {
     dbMocks.getDiagnosisBySlug.mockResolvedValue(makeDiagRow({ is_active: 0 }));
     const res = await req('GET', '/api/liff/diagnoses/redent-cleanliness');

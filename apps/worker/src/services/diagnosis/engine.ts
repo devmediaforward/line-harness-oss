@@ -10,8 +10,10 @@ import type {
   AxisGradeKey,
   DiagnosisAnswers,
   DiagnosisAxisGrades,
+  DiagnosisBooking,
   DiagnosisCondition,
   DiagnosisDefinition,
+  DiagnosisDiscount,
   DiagnosisResult,
   DiagnosisResultPage,
   LookupResolver,
@@ -26,6 +28,7 @@ import type {
   ResultEmptyStateTexts,
 } from '@line-crm/shared';
 import { keyTagSignature } from './signature.js';
+import { isHttpsUrl } from './url.js';
 
 /** エンジン内部の立ちタグ表現 */
 interface StandingTag {
@@ -49,6 +52,16 @@ interface EvalCtx {
 /** 表示用スコア: 小数第2位まで */
 function round2(x: number): number {
   return Math.round(x * 100) / 100;
+}
+
+/**
+ * 金額の円未満切り捨て。IEEE754 の誤差で数学的な整数(例 17600*0.6=10560)が
+ * 10559.999... と表現され 1 円下振れするのを防ぐため、整数との差が誤差の範囲に
+ * 収まるときだけその整数に丸める。本来の端数(0.9999995 等)は切り捨てたまま。
+ */
+function floorYen(x: number): number {
+  const nearest = Math.round(x);
+  return Math.abs(x - nearest) < 1e-9 ? nearest : Math.floor(x);
 }
 
 /** "X@2"(重症度保持タグ)を base と point に分解。@ 無しは point=null */
@@ -364,6 +377,15 @@ export function runDiagnosis(
     card.priceInTax = Math.round(card.priceExTax * (1 + taxRate));
   }
 
+  // Step 7.1: 割引後価格(任意)。定義側の割引率を後で変えても過去の結果は当時の
+  // 価格のまま残るよう、ここでカードへ焼き込む。円未満は切り捨て。
+  const discountRate = definition.resultPage.discount?.rate;
+  if (typeof discountRate === 'number' && discountRate > 0 && discountRate < 1) {
+    for (const card of cards) {
+      card.discountedPriceInTax = floorYen(card.priceInTax * (1 - discountRate));
+    }
+  }
+
   // Step 6.3.3: noteRules を最終採用カード集合に対して評価
   const cardByAxis = new Map(cards.map((c) => [c.axisId, c] as const));
   const presentAxes = new Set(cards.map((c) => c.axisId));
@@ -426,6 +448,23 @@ export function runDiagnosis(
   if (rp.rankImages) {
     const url = rp.rankImages[chosenRank.rank];
     if (typeof url === 'string') result.rankImageUrl = url;
+  }
+  // I4: 割引表示のラベル類(rate は Step 7.1 と同じ有効範囲のときだけ焼き込む)。
+  if (rp.discount && typeof rp.discount.rate === 'number' && rp.discount.rate > 0 && rp.discount.rate < 1) {
+    const discount: DiagnosisDiscount = { rate: rp.discount.rate };
+    if (typeof rp.discount.badgeLabel === 'string') discount.badgeLabel = rp.discount.badgeLabel;
+    if (typeof rp.discount.conditionLabel === 'string') discount.conditionLabel = rp.discount.conditionLabel;
+    if (typeof rp.discount.notice === 'string') discount.notice = rp.discount.notice;
+    result.discount = discount;
+  }
+  // I5: 予約導線(Flex はスナップショットのみで組み立てるため必ず焼き込む)。
+  // url は保存時に検証済みだが、DB 直更新・検証外経路の定義が来ても
+  // javascript: 等が Flex の uri action に載らないよう実行時にも https を要求する。
+  if (rp.booking && isHttpsUrl(rp.booking.url)) {
+    const booking: DiagnosisBooking = { url: rp.booking.url };
+    if (typeof rp.booking.label === 'string') booking.label = rp.booking.label;
+    if (typeof rp.booking.subText === 'string') booking.subText = rp.booking.subText;
+    result.booking = booking;
   }
 
   return result;

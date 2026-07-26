@@ -1,9 +1,25 @@
 import liff from '@line/liff';
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { useParams } from 'react-router-dom';
-import { api, type DiagnosisDefinitionForLiff, type DiagnosisSubmissionResponse } from '../lib/api.js';
+import {
+  api,
+  type DiagnosisDefinitionForLiff,
+  type DiagnosisIntro,
+  type DiagnosisIntroRankPreview,
+  type DiagnosisSubmissionResponse,
+} from '../lib/api.js';
 import DiagnosisResultView from '../components/DiagnosisResultView.js';
+import DiagnosisBandCurve from '../components/DiagnosisBandCurve.js';
 import { prefersReducedMotion, delay } from '../lib/motion.js';
+import {
+  BAND_NAVY,
+  estimateMinutes,
+  groundOffset,
+  rankColor,
+  ringBrightness,
+  ringScale,
+  symmetricLayout,
+} from '../lib/diagnosis-theme.js';
 
 type Phase = 'loading' | 'error' | 'intro' | 'answering' | 'submitting' | 'submit_error' | 'result';
 type FriendStatus = 'unknown' | 'friend' | 'not_friend';
@@ -12,7 +28,38 @@ function errText(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
-// A5: 採点中演出。4軸アイコンが順に点灯 → 応答が 3 秒を超えたら通常スピナーへ。
+function isHttpsUrl(v: string | undefined): v is string {
+  return typeof v === 'string' && v.startsWith('https://');
+}
+
+/**
+ * ランク紹介を降順（上位が先頭）に整える。minScore が全件あればそれで降順、
+ * 無ければ定義の記述順（下位→上位）を反転する。
+ */
+function orderedRankPreview(intro: DiagnosisIntro | undefined): DiagnosisIntroRankPreview[] {
+  const rows = intro?.rankPreview ?? [];
+  if (rows.length === 0) return [];
+  if (rows.every((r) => typeof r.minScore === 'number')) {
+    return [...rows].sort((a, b) => (b.minScore as number) - (a.minScore as number));
+  }
+  return [...rows].reverse();
+}
+
+/** ヒーローに立たせるキャラ（降順・https のみ）。heroImages 優先、無ければ行画像。 */
+function heroFigures(intro: DiagnosisIntro | undefined): Array<{ rank: string; url: string }> {
+  if (!intro) return [];
+  const hero = intro.heroImages;
+  const ordered = orderedRankPreview(intro);
+  const rows =
+    ordered.length > 0
+      ? ordered.map((r) => ({ rank: r.rank, url: hero?.[r.rank] ?? r.imageUrl }))
+      : Object.entries(hero ?? {})
+          .reverse()
+          .map(([rank, url]) => ({ rank, url }));
+  return rows.filter((r): r is { rank: string; url: string } => isHttpsUrl(r.url));
+}
+
+// A5: 採点中演出。4軸のマークが順に点灯 → 応答が 3 秒を超えたら通常スピナーへ。
 // 表示の最低時間(800ms)と結果への遷移は submit() 側で制御する(演出はここでは純表示)。
 function CollectingScreen({
   axes,
@@ -34,11 +81,9 @@ function CollectingScreen({
   return (
     <div className="dx-collect">
       {showLamps ? (
-        <div className="dx-collect-axes">
+        <div className="dx-collect-axes" aria-hidden="true">
           {lamps.map((ax, i) => (
-            <div key={ax.id} className="dx-collect-axis" style={{ animationDelay: `${i * 0.18}s` }}>
-              ●
-            </div>
+            <span key={ax.id} className="dx-collect-axis" style={{ animationDelay: `${i * 0.18}s` }} />
           ))}
         </div>
       ) : (
@@ -188,34 +233,123 @@ export default function Diagnosis() {
 
   if (!def) return null;
 
-  const container = 'max-w-md mx-auto p-4 pb-12 min-h-screen';
-
-  // ── イントロ（スコープ外: 既存の見た目を維持） ──────────────────────────
+  // ── 診断前（濃紺の帯 + 弧 + 紙面 + 下部固定CTA） ────────────────────────
   if (phase === 'intro') {
     const botBasicId = (import.meta.env.VITE_BOT_BASIC_ID as string | undefined)?.trim();
     const showFriendGate = friendStatus === 'not_friend' && !!botBasicId;
+    const intro = def.intro;
+    const catchCopy = intro?.catchCopy?.trim() || def.meta.name;
+    const subCopy = intro?.subCopy?.trim() || def.meta.description;
+    const aboutLines =
+      intro?.aboutLines && intro.aboutLines.length > 0
+        ? intro.aboutLines
+        : def.meta.description
+          ? [def.meta.description]
+          : [];
+    const previews = orderedRankPreview(intro);
+    const figures = symmetricLayout(heroFigures(intro));
+
     return (
-      <div className={container}>
-        <div className="af-fade-in space-y-5 pt-6">
-          <div className="space-y-2 text-center">
-            <h1 className="text-xl font-bold text-gray-900">{def.meta.name}</h1>
-            {def.meta.description && (
-              <p className="text-sm leading-relaxed text-gray-600">{def.meta.description}</p>
-            )}
-            <p className="text-xs font-medium text-gray-400">約2分・{def.questions.length}問</p>
+      <div className="dx-intro">
+        <header className="dx-band" style={{ background: BAND_NAVY }}>
+          <div className="dx-band-inner">
+            <h1 className="dx-band-title">{catchCopy}</h1>
+            {subCopy && <p className="dx-band-sub">{subCopy}</p>}
+            <ul className="dx-facts">
+              <li className="dx-fact dx-tnum">全{def.questions.length}問</li>
+              <li className="dx-fact dx-tnum">約{estimateMinutes(def.questions.length)}分</li>
+              {/* 未友だちには友だち追加が必須なので「登録不要」は出さない（矛盾するため） */}
+              {!showFriendGate && <li className="dx-fact">登録不要</li>}
+            </ul>
           </div>
+          {figures.length > 0 && (
+            <div className="dx-figs">
+              {figures.map((slot, i) => (
+                <div
+                  key={slot.item.rank}
+                  className="dx-fig"
+                  style={{
+                    height: `calc(var(--dx-fig-h) * ${ringScale(slot.ring)})`,
+                    marginBottom: `${groundOffset(i, figures.length)}px`,
+                    zIndex: figures.length - slot.ring,
+                  }}
+                >
+                  <span className="dx-fig-shadow" aria-hidden="true" />
+                  <img
+                    className="dx-fig-img"
+                    src={slot.item.url}
+                    alt=""
+                    aria-hidden="true"
+                    style={{ filter: `brightness(${ringBrightness(slot.ring)})` }}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+          <DiagnosisBandCurve />
+        </header>
+
+        <main className="dx-paper">
+          {aboutLines.length > 0 && (
+            <section className="dx-sec">
+              <h2 className="dx-sec-h">この診断について</h2>
+              <div className="dx-panel">
+                {aboutLines.map((line, i) => (
+                  <p key={i} className="dx-about-line">
+                    {line}
+                  </p>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {previews.length > 0 && (
+            <section className="dx-sec">
+              <h2 className="dx-sec-h">{previews.length}つのランク</h2>
+              <ul className="dx-ranks">
+                {previews.map((r, i) => {
+                  const img = intro?.heroImages?.[r.rank] ?? r.imageUrl;
+                  return (
+                    <li key={r.rank} className="dx-rank">
+                      {isHttpsUrl(img) && (
+                        <img className="dx-rank-img" src={img} alt="" aria-hidden="true" loading="lazy" />
+                      )}
+                      <div className="dx-rank-body">
+                        <div className="dx-rank-head">
+                          <span
+                            className="dx-rank-badge"
+                            style={{ background: rankColor(r.rank, previews.length - 1 - i) }}
+                          >
+                            {r.rank}
+                          </span>
+                          <span className="dx-rank-title">{r.title}</span>
+                        </div>
+                        {typeof r.minScore === 'number' && (
+                          <div className="dx-rank-score dx-tnum">{r.minScore}点以上</div>
+                        )}
+                        {r.subcopy && <p className="dx-rank-sub">{r.subcopy}</p>}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          )}
+        </main>
+
+        <div className="dx-ctabar">
           {showFriendGate ? (
-            <div className="space-y-2">
+            <>
               <button
                 onClick={() => liff.openWindow({ url: `https://line.me/R/ti/p/${botBasicId}`, external: true })}
-                className="af-primary-btn"
+                className="dx-cta"
               >
                 友だち追加して診断をはじめる
               </button>
-              <p className="text-center text-xs text-gray-500">追加後、この画面に戻ると診断をはじめられます</p>
-            </div>
+              <p className="dx-ctabar-note">追加後、この画面に戻ると診断をはじめられます</p>
+            </>
           ) : (
-            <button onClick={startAnswering} className="af-primary-btn">
+            <button onClick={startAnswering} className="dx-cta">
               診断をはじめる
             </button>
           )}
@@ -228,9 +362,7 @@ export default function Diagnosis() {
   if (phase === 'submitting') {
     return (
       <div className="dx-screen">
-        <div className="dx-wrap">
-          <CollectingScreen axes={def.axes} reduced={reduced} />
-        </div>
+        <CollectingScreen axes={def.axes} reduced={reduced} />
       </div>
     );
   }
@@ -238,7 +370,7 @@ export default function Diagnosis() {
   // ── 送信失敗（エラー表示: 既存の見た目を維持） ────────────────────────
   if (phase === 'submit_error') {
     return (
-      <div className={container}>
+      <div className="max-w-md mx-auto p-4 pb-12 min-h-screen">
         <div className="space-y-3 pt-8">
           <div className="rounded bg-red-50 p-3 text-sm text-red-700">{errorMsg}</div>
           <button onClick={() => void submit(answers)} className="af-primary-btn">
@@ -263,54 +395,53 @@ export default function Diagnosis() {
     );
   }
 
-  // ── 回答フロー（1問1画面・A0/A1/A2/A4） ────────────────────────────────
+  // ── 診断中（濃紺ヘッダー + 紙面・1問1画面） ─────────────────────────────
   const total = def.questions.length;
   const q = def.questions[current];
   const scale = def.answerScale;
   const selected = answers[q.id];
-  const axisLabel = def.axes.find((a) => a.id === q.axisId)?.label ?? '';
   const currentAxisIndex = def.axes.findIndex((a) => a.id === q.axisId);
-  const showAxisHeader = current === 0 || def.questions[current - 1].axisId !== q.axisId;
-  const progressPct = Math.round(((current + 1) / total) * 100);
   const remaining = total - current; // 現在の設問を含む残数
   const soon = remaining <= 5;
 
   return (
     <div className="dx-screen">
-      <div className="dx-wrap">
-        {/* A4: 常設ヘッダ（進捗バー + 軸ドット + 残数） */}
-        <div className="dx-head">
+      <header className="dx-band dx-band-sticky" style={{ background: BAND_NAVY }}>
+        <div className="dx-band-inner">
           <div className="dx-head-top">
             <button onClick={back} className="dx-back">
               ← 戻る
             </button>
-            <span className="dx-count">
-              <b className="dx-tnum">{current + 1}</b> / {total}
+            <span className="dx-count dx-tnum">
+              <b>{current + 1}</b> / {total}
             </span>
           </div>
-          <div className="dx-axis-dots" aria-hidden="true">
-            {def.axes.map((ax, j) => (
-              <span
-                key={ax.id}
-                className={`dx-axis-dot${j < currentAxisIndex ? ' is-done' : j === currentAxisIndex ? ' is-active' : ''}`}
-              />
+          {/* 設問数ぶんの刻み。回答済みが白く埋まる。 */}
+          <div className="dx-ticks" aria-hidden="true">
+            {def.questions.map((item, j) => (
+              <span key={item.id} className={`dx-tick${j <= current ? ' is-on' : ''}`} />
             ))}
           </div>
-          <div className="dx-bar">
-            <div className={`dx-bar-fill${soon ? ' is-hot' : ''}`} style={{ width: `${progressPct}%` }} />
+          <div className="dx-axisnav">
+            {def.axes.map((ax, j) => (
+              <span key={ax.id} className={`dx-axisnav-item${j === currentAxisIndex ? ' is-current' : ''}`}>
+                {ax.shortLabel ?? ax.label}
+              </span>
+            ))}
           </div>
           <div className="dx-remain">
             <span className="dx-tnum">あと {remaining} 問</span>
             {soon && <span className="dx-soon">もうすぐ結果！</span>}
           </div>
         </div>
+        <DiagnosisBandCurve />
+      </header>
 
-        {/* A1: 設問スライド遷移（key 再マウントで enter アニメを再生） */}
+      {/* A1: 設問スライド遷移（key 再マウントで enter アニメを再生） */}
+      <main className="dx-paper">
         <div key={q.id} className={`dx-q ${direction === 'back' ? 'dx-q-enter-back' : 'dx-q-enter-fwd'}`}>
-          {showAxisHeader && axisLabel && <div className="dx-axis-label">{axisLabel}</div>}
           <h2 className="dx-qtext">{q.text}</h2>
-
-          {/* A2: 強度ビジュアル + 押下フィードバック */}
+          {/* A2: 強度は左の円の大きさで表す（色のグラデーションは使わない） */}
           <div className="dx-opts">
             {scale.labels.map((label, i) => {
               const value = scale.min + i;
@@ -320,7 +451,7 @@ export default function Diagnosis() {
                   key={value}
                   onClick={() => choose(value)}
                   className={`dx-opt${isSelected ? ' is-selected' : ''}`}
-                  style={optionStyle(i, scale.labels.length)}
+                  style={pipStyle(i, scale.labels.length)}
                 >
                   <span className="dx-opt-pip" aria-hidden="true" />
                   <span className="dx-opt-label">{label}</span>
@@ -329,12 +460,14 @@ export default function Diagnosis() {
             })}
           </div>
         </div>
-      </div>
+      </main>
 
       {/* A3: 軸クリア演出（応援型・タップで即スキップ） */}
       {interstitial && (
         <div className="dx-inter" onClick={() => setInterstitial(null)} role="button" tabIndex={-1}>
-          <div className="dx-inter-emoji">🔥</div>
+          <div className="dx-inter-emoji" aria-hidden="true">
+            🔥
+          </div>
           <div className="dx-inter-hi">いい調子！</div>
           <div className="dx-inter-sub">{interstitial.label} 完了</div>
           <div className="dx-inter-dots" aria-hidden="true">
@@ -349,20 +482,8 @@ export default function Diagnosis() {
   );
 }
 
-// A2: 選択肢の強度カラー/サイズ。t=0(当てはまらない)→ 落ち着いた色・小、
-// t=1(とても当てはまる)→ ビビッド・大。診断非依存の固定ランプ(index-based)。
-function optionStyle(i: number, n: number): CSSProperties {
+// A2: 選択肢の強度は左の円の直径だけで表現する（診断非依存の index ベース）。
+function pipStyle(i: number, n: number): CSSProperties {
   const t = n > 1 ? i / (n - 1) : 0;
-  const lo = [100, 116, 139]; // slate-500
-  const hi = [244, 63, 94]; // rose-500
-  const mix = (a: number, b: number) => Math.round(a + (b - a) * t);
-  const r = mix(lo[0], hi[0]);
-  const g = mix(lo[1], hi[1]);
-  const b = mix(lo[2], hi[2]);
-  return {
-    ['--dx-opt-color']: `rgb(${r},${g},${b})`,
-    ['--dx-opt-tint']: `rgba(${r},${g},${b},0.16)`,
-    ['--dx-opt-size']: `${9 + Math.round(t * 11)}px`,
-    ['--dx-opt-fs']: `${(14 + t * 2.5).toFixed(1)}px`,
-  } as CSSProperties;
+  return { ['--dx-pip']: `${10 + Math.round(t * 14)}px` } as CSSProperties;
 }

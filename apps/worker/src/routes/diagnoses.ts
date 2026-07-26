@@ -36,11 +36,14 @@ import {
 import type {
   DiagnosisAnswers,
   DiagnosisDefinition,
+  DiagnosisIntro,
+  DiagnosisIntroRankPreview,
   DiagnosisResult,
 } from '@line-crm/shared';
 import { runDiagnosis } from '../services/diagnosis/engine.js';
 import { validateDefinition } from '../services/diagnosis/validate.js';
 import { buildResultFlex } from '../services/diagnosis/flex.js';
+import { isHttpsUrl } from '../services/diagnosis/url.js';
 import { verifyCallerLineUserId } from '../services/liff-auth.js';
 import type { Env } from '../index.js';
 
@@ -57,6 +60,50 @@ function safeParse<T>(s: string, fallback: T): T {
   } catch {
     return fallback;
   }
+}
+
+/**
+ * LIFF 定義API に返す intro を許可フィールドだけで再構築する。
+ *
+ * definition.intro をそのまま返すと、定義に未知キー(原価・配点 等)を入れた場合に
+ * 無検査で公開されてしまう。バリデータは未知キーを拒否しないため、ここが
+ * 「何を公開するか」の唯一の門になる。型が合わない値は落とす(エラーにしない)。
+ */
+function pickIntroForLiff(input: unknown): DiagnosisIntro | null {
+  if (typeof input !== 'object' || input === null || Array.isArray(input)) return null;
+  const src = input as Record<string, unknown>;
+  const intro: DiagnosisIntro = {};
+
+  if (typeof src.catchCopy === 'string') intro.catchCopy = src.catchCopy;
+  if (typeof src.subCopy === 'string') intro.subCopy = src.subCopy;
+  if (Array.isArray(src.aboutLines)) {
+    intro.aboutLines = src.aboutLines.filter((l): l is string => typeof l === 'string');
+  }
+
+  if (Array.isArray(src.rankPreview)) {
+    const rows: DiagnosisIntroRankPreview[] = [];
+    for (const rowRaw of src.rankPreview) {
+      if (typeof rowRaw !== 'object' || rowRaw === null || Array.isArray(rowRaw)) continue;
+      const r = rowRaw as Record<string, unknown>;
+      if (typeof r.rank !== 'string' || typeof r.title !== 'string') continue;
+      const row: DiagnosisIntroRankPreview = { rank: r.rank, title: r.title };
+      if (typeof r.subcopy === 'string') row.subcopy = r.subcopy;
+      if (typeof r.minScore === 'number' && Number.isFinite(r.minScore)) row.minScore = r.minScore;
+      if (isHttpsUrl(r.imageUrl)) row.imageUrl = r.imageUrl;
+      rows.push(row);
+    }
+    intro.rankPreview = rows;
+  }
+
+  if (typeof src.heroImages === 'object' && src.heroImages !== null && !Array.isArray(src.heroImages)) {
+    const images: Record<string, string> = {};
+    for (const [rank, url] of Object.entries(src.heroImages as Record<string, unknown>)) {
+      if (isHttpsUrl(url)) images[rank] = url;
+    }
+    intro.heroImages = images;
+  }
+
+  return intro;
 }
 
 /** 詳細(definition 含む)。GET /:id・作成・更新のレスポンス。 */
@@ -408,6 +455,7 @@ async function applyDiagnosisSideEffects(
     try {
       const liffResultUrl = buildLiffResultUrl(definition.share?.liffUrl ?? '', submissionId);
       if (liffResultUrl) {
+        // 予約導線は result.booking(スナップショット)を buildResultFlex が直接見る。
         const flex = buildResultFlex({
           result,
           diagnosisName: definition.meta?.name ?? '',
@@ -718,11 +766,14 @@ diagnoses.get('/api/liff/diagnoses/:slug', async (c) => {
     const definition = safeParse<DiagnosisDefinition | null>(diag.definition, null);
     if (!definition) return c.json({ error: 'invalid_definition' }, 500);
     // scoring / recommendation / resultPage / share / sideEffects は返さない(価格戦略の秘匿)。
+    // intro は診断前画面の表示専用ブロック。そのまま返さず許可フィールドのみ再構築する。
+    const intro = definition.intro === undefined ? null : pickIntroForLiff(definition.intro);
     return c.json({
       meta: definition.meta,
       axes: definition.axes,
       answerScale: definition.answerScale,
       questions: definition.questions,
+      ...(intro ? { intro } : {}),
     });
   } catch {
     return c.json({ error: 'internal_error' }, 500);

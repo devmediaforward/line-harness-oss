@@ -578,6 +578,121 @@ describe('H. ランク画像の焼き込み (R6)', () => {
   });
 });
 
+describe('I. 割引・予約の焼き込み (I4/I5)', () => {
+  /** resultPage に discount / booking を差し込んだ定義を作る */
+  function defWithResultPage(patch: Record<string, unknown>): DiagnosisDefinition {
+    const cloned = JSON.parse(JSON.stringify(def)) as DiagnosisDefinition;
+    Object.assign(cloned.resultPage as unknown as Record<string, unknown>, patch);
+    return cloned;
+  }
+
+  const cardAnswers = bodyKeyAnswers(['胴体', '腕']); // body カードが必ず1枚出る回答
+
+  it('I1: discountedPriceInTax = floor(priceInTax * (1 - rate))', () => {
+    const d = defWithResultPage({ discount: { rate: 0.4 } });
+    const res = runDiagnosis(d, cardAnswers);
+    expect(res.cards.length).toBeGreaterThan(0);
+    for (const card of res.cards) {
+      expect(card.discountedPriceInTax).toBe(Math.floor(card.priceInTax * (1 - 0.4)));
+    }
+  });
+
+  it('I2: 円未満は切り捨て(四捨五入しない)', () => {
+    // floor と round が食い違う価格を作って切り捨てであることを確定させる。
+    // priceExTax=10005 / taxRate=0.1 → priceInTax=round(11005.5)=11006
+    // → 11006 * 0.6 = 6603.6 → floor=6603 / round=6604
+    const d = defWithResultPage({ discount: { rate: 0.4 } });
+    const bodyResolver = d.recommendation.resolvers.body;
+    if (bodyResolver.type !== 'lookup') throw new Error('body resolver は lookup ではありません');
+    const row = bodyResolver.table.find(
+      (r) => r.key.length === 2 && r.key.includes('胴体') && r.key.includes('腕'),
+    );
+    expect(row).toBeDefined();
+    row!.priceExTax = 10005;
+
+    const card = runDiagnosis(d, cardAnswers).cards.find((c) => c.axisId === 'body');
+    expect(card).toBeDefined();
+    expect(card!.priceInTax).toBe(11006);
+    expect(card!.discountedPriceInTax).toBe(6603); // floor。round なら 6604
+  });
+
+  it('I3: discount 未設定なら discountedPriceInTax も result.discount も付かない(後方互換)', () => {
+    const res = runDiagnosis(def, cardAnswers);
+    expect(res.cards.length).toBeGreaterThan(0);
+    for (const card of res.cards) {
+      expect(card.discountedPriceInTax).toBeUndefined();
+    }
+    expect(res.discount).toBeUndefined();
+  });
+
+  it('I4: result.discount にラベル類をスナップショット', () => {
+    const d = defWithResultPage({
+      discount: { rate: 0.4, badgeLabel: 'B', conditionLabel: 'C', notice: 'N' },
+    });
+    const res = runDiagnosis(d, cardAnswers);
+    expect(res.discount).toEqual({ rate: 0.4, badgeLabel: 'B', conditionLabel: 'C', notice: 'N' });
+  });
+
+  it('I5: rate が範囲外(0 / 1 / 負)なら割引は焼き込まれない', () => {
+    for (const rate of [0, 1, -0.2, 1.5]) {
+      const res = runDiagnosis(defWithResultPage({ discount: { rate } }), cardAnswers);
+      expect(res.discount).toBeUndefined();
+      for (const card of res.cards) expect(card.discountedPriceInTax).toBeUndefined();
+    }
+  });
+
+  it('I6: booking を result.booking へ焼き込む', () => {
+    const d = defWithResultPage({
+      booking: { url: 'https://booking.example.com/reserve', label: 'L', subText: 'S' },
+    });
+    const res = runDiagnosis(d, cardAnswers);
+    expect(res.booking).toEqual({ url: 'https://booking.example.com/reserve', label: 'L', subText: 'S' });
+  });
+
+  it('I7: booking の label / subText は任意(url のみでも焼き込む)', () => {
+    const d = defWithResultPage({ booking: { url: 'https://booking.example.com/reserve' } });
+    const res = runDiagnosis(d, cardAnswers).booking;
+    expect(res).toEqual({ url: 'https://booking.example.com/reserve' });
+  });
+
+  it('I8: booking 未設定なら result.booking は付かない(後方互換)', () => {
+    expect(runDiagnosis(def, cardAnswers).booking).toBeUndefined();
+  });
+
+  it('I9: booking.url が https 以外なら焼き込まない(保存済み定義の実行時防御)', () => {
+    for (const url of [
+      'javascript:alert(1)',
+      'http://booking.example.com/reserve',
+      'data:text/html,x',
+      'https://',
+      '',
+      123,
+    ]) {
+      const d = defWithResultPage({ booking: { url, label: 'L' } });
+      expect(runDiagnosis(d, cardAnswers).booking).toBeUndefined();
+    }
+  });
+
+  it('I10: 数学上の整数になる割引額が浮動小数点誤差で1円下振れしない', () => {
+    // priceExTax=1173 / taxRate=0.1 → priceInTax=round(1290.3)=1290
+    // 1290 * (1 - 0.3) は数学的に 903 ちょうどだが、IEEE754 では 902.9999999999999
+    // となり素の Math.floor だと 902 に落ちる。イプシロン補正で 903 になること。
+    expect(Math.floor(1290 * (1 - 0.3))).toBe(902); // 誤差が実在することの確認
+    const d = defWithResultPage({ discount: { rate: 0.3 } });
+    const bodyResolver = d.recommendation.resolvers.body;
+    if (bodyResolver.type !== 'lookup') throw new Error('body resolver は lookup ではありません');
+    const row = bodyResolver.table.find(
+      (r) => r.key.length === 2 && r.key.includes('胴体') && r.key.includes('腕'),
+    );
+    expect(row).toBeDefined();
+    row!.priceExTax = 1173;
+
+    const card = runDiagnosis(d, cardAnswers).cards.find((c) => c.axisId === 'body');
+    expect(card?.priceInTax).toBe(1290);
+    expect(card?.discountedPriceInTax).toBe(903);
+  });
+});
+
 // =============================================================================
 // 入力検証(Step 1)
 // =============================================================================

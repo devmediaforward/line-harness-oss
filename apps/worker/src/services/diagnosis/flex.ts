@@ -9,6 +9,7 @@
 
 import type { DiagnosisResult } from '@line-crm/shared';
 import type { FlexBubble, FlexComponent, FlexMessage } from '@line-crm/line-sdk';
+import { isHttpsUrl } from './url.js';
 
 /** ランク文字色。慣例的なランクレター基準(未知ランクは既定=グレー)。実装側で調整可。 */
 const RANK_COLORS: Record<string, string> = {
@@ -34,12 +35,17 @@ const GRADE_COLOR: Record<string, string> = {
   warn: '#DC2626',
 };
 
+/** 予約ボタンの既定文言(診断非依存の汎用語。定義側 label があればそちらを使う)。 */
+const BOOKING_DEFAULT_LABEL = '予約する';
+/** 予約ボタンの色(LINE 緑)。 */
+const BOOKING_COLOR = '#06C755';
+
 export interface BuildResultFlexInput {
   /** 保存済み結果スナップショット */
   result: DiagnosisResult;
   /** 診断名(definition.meta.name)。header と altText に使用 */
   diagnosisName: string;
-  /** 「結果をくわしく見る」primary ボタンの遷移先 LIFF URL */
+  /** 「結果をくわしく見る」ボタンの遷移先 LIFF URL */
   liffResultUrl: string;
   /** 「友だちにシェアする」secondary ボタンの共有 URL。空文字なら省略 */
   shareUrl: string;
@@ -48,6 +54,10 @@ export interface BuildResultFlexInput {
 /** 結果 Flex メッセージ(bubble 1通)を組み立てる。 */
 export function buildResultFlex(input: BuildResultFlexInput): FlexMessage {
   const { result, diagnosisName, liffResultUrl, shareUrl } = input;
+  // 予約導線はスナップショット(result.booking)を唯一の出所とする。呼び出し側から
+  // 別経路で渡せるようにすると、結果ページと Flex の遷移先が食い違いうるため。
+  // 最終出力の境界としてここでも https を要求する(多層防御)。
+  const booking = result.booking && isHttpsUrl(result.booking.url) ? result.booking : null;
   const rankColor = RANK_COLORS[result.rank] ?? DEFAULT_RANK_COLOR;
 
   // 軸ごとの grade 行(axes 順・軸数可変)。ラベル + grade 記号のみ。
@@ -70,14 +80,30 @@ export function buildResultFlex(input: BuildResultFlexInput): FlexMessage {
     ],
   }));
 
-  const footerContents: FlexComponent[] = [
-    {
+  // 予約ボタン(I5)。booking があるときだけ footer 先頭に primary で入り、
+  // 「結果をくわしく見る」は secondary の2番手に下がる。booking が無ければ
+  // 従来と完全に同じ構成(primary の「結果をくわしく見る」+ シェア)。
+  const footerContents: FlexComponent[] = [];
+  if (booking) {
+    footerContents.push({
       type: 'button',
       style: 'primary',
-      color: '#06C755',
+      color: BOOKING_COLOR,
+      action: { type: 'uri', label: booking.label || BOOKING_DEFAULT_LABEL, uri: booking.url },
+    });
+    footerContents.push({
+      type: 'button',
+      style: 'secondary',
       action: { type: 'uri', label: '結果をくわしく見る', uri: liffResultUrl },
-    },
-  ];
+    });
+  } else {
+    footerContents.push({
+      type: 'button',
+      style: 'primary',
+      color: BOOKING_COLOR,
+      action: { type: 'uri', label: '結果をくわしく見る', uri: liffResultUrl },
+    });
+  }
   // シェアボタンは任意(shareUrl があるときだけ表示)。
   if (shareUrl) {
     footerContents.push({
