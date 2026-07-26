@@ -56,9 +56,9 @@ export function symmetricLayout<T>(items: T[]): Array<SymmetricSlot<T>> {
   return [...left, { item: items[0], ring: 0 }, ...right];
 }
 
-/** ring からの表示倍率（外側ほど小さい）。 */
+/** ring からの表示倍率（外側ほど小さい）。落差を抑えて群像としてまとまるようにする。 */
 export function ringScale(ring: number): number {
-  return Math.max(0.36, 1 - 0.22 * ring);
+  return Math.max(0.42, 1 - 0.17 * ring);
 }
 
 /** ring からの明度（外側ほど暗い）。CSS filter: brightness() に渡す。 */

@@ -138,7 +138,7 @@ body {
   --dx-book: #06c755;
   --dx-curve-h: 38px;
   --dx-max: 30rem;
-  --dx-fig-h: clamp(140px, 48vw, 230px);
+  --dx-fig-h: clamp(190px, 66vw, 300px);
   min-height: 100vh;
   background: var(--dx-paper);
   color: var(--dx-ink);
@@ -163,13 +163,16 @@ body {
 
 /* ── キャラクター群像(中央主役の左右対称・弧の上に接地) ──────────── */
 .dx-figs { position: relative; display: flex; align-items: flex-end; justify-content: center;
-  max-width: var(--dx-max); margin: 18px auto calc(var(--dx-curve-h) * -1); padding: 0 8px; }
-.dx-fig { position: relative; flex: 0 0 auto; display: flex; align-items: flex-end; margin: 0 -1%; }
+  max-width: var(--dx-max); margin: 10px auto calc(var(--dx-curve-h) * -1); padding: 0; }
+/* わずかに重ねて群像としてまとめる。両端は重ねず画面幅いっぱいに広げる。 */
+.dx-fig { position: relative; flex: 0 0 auto; display: flex; align-items: flex-end; margin: 0 -1.5%; }
+.dx-fig:first-child { margin-left: 0; }
+.dx-fig:last-child { margin-right: 0; }
 .dx-fig-img { display: block; height: 100%; width: auto; max-width: none; }
 .dx-fig-shadow { position: absolute; left: 50%; bottom: -3px; width: 84%; height: 12px;
   transform: translateX(-50%); background: radial-gradient(closest-side, rgba(0, 0, 0, 0.32), rgba(0, 0, 0, 0)); }
-/* 結果ヒーローは1体だけなので大きく見せる */
-.dx-figs-solo { padding: 0; --dx-fig-h: clamp(150px, 48vw, 240px); }
+/* 結果ヒーローは1体だけなので大きく見せる(余白を詰めて主役を立てる) */
+.dx-figs-solo { padding: 0; margin-top: 2px; --dx-fig-h: clamp(240px, 78vw, 380px); }
 .dx-figs-solo .dx-fig { margin: 0 0 14px; }
 
 /* ── 紙面 ───────────────────────────────────────────────────────── */
@@ -286,9 +289,11 @@ body {
 
 /* ── 結果: 帯 ───────────────────────────────────────────────────── */
 .dx-band-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: var(--dx-on-band-dim); }
-.dx-band-title-xl { margin-top: 8px; font-size: 34px; }
-.dx-band-rank { margin-top: 10px; font-size: 14px; font-weight: 800; color: var(--dx-on-band-dim); }
-.dx-band-score { margin-top: 4px; font-size: 15px; font-weight: 800; }
+.dx-band-title-xl { margin-top: 6px; font-size: 34px; }
+.dx-band-rank { margin-top: 6px; font-size: 14px; font-weight: 800; color: var(--dx-on-band-dim); }
+.dx-band-score { margin-top: 2px; font-size: 15px; font-weight: 800; }
+/* 結果は帯の上下を詰めてキャラを主役にする */
+.dx-result .dx-band-inner { padding-top: 14px; }
 .dx-band-letter { margin-top: 14px; text-align: center; font-size: 76px; font-weight: 900; line-height: 1; }
 
 /* ── 結果: 紙面 ─────────────────────────────────────────────────── */
