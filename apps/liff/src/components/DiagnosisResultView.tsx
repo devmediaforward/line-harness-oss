@@ -546,12 +546,15 @@ export default function DiagnosisResultView({
         <section className="dx-sec">
           <h2 className="dx-sec-h">{RECOMMEND_HEADING}</h2>
           {discount?.notice && <p className="dx-discount-notice">{discount.notice}</p>}
-          {result.emptyState ? (
+          {/* 空状態の文言は「悩みが立たなかった」ことの説明。定義に提案カードが
+              用意されていれば、その下に通常のおすすめと同じ体裁で 1 枚並ぶ。 */}
+          {result.emptyState && (
             <div className="dx-panel dx-empty">
               <p className="dx-empty-msg">{emptyStateTexts.message}</p>
               {emptyStateTexts.cta && <p className="dx-empty-cta">{emptyStateTexts.cta}</p>}
             </div>
-          ) : (
+          )}
+          {(result.cards.length > 0 || result.axisMessages.length > 0) && (
             <div className="dx-reco-list">
               {result.cards.map((card, idx) => (
                 <Reveal key={`${card.axisId}-${idx}`} animate={animate} index={idx}>

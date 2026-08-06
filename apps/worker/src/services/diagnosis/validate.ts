@@ -610,6 +610,37 @@ function runValidation(input: unknown): string[] {
         if ('cta' in rp.emptyState && typeof rp.emptyState.cta !== 'string') {
           errors.push('resultPage.emptyState.cta は文字列である必要があります');
         }
+        // 悩みが無い人向けの提案カード(任意)。通常カードと同じ経路に載るため同じ制約。
+        if ('card' in rp.emptyState) {
+          const ec = rp.emptyState.card;
+          if (!isObj(ec)) {
+            errors.push('resultPage.emptyState.card はオブジェクトである必要があります');
+          } else {
+            if (typeof ec.axisId !== 'string' || !axisIds.has(ec.axisId)) {
+              errors.push('resultPage.emptyState.card.axisId は axes に存在する id である必要があります');
+            }
+            for (const field of ['title', 'reason'] as const) {
+              if (typeof ec[field] !== 'string' || !ec[field]) {
+                errors.push(`resultPage.emptyState.card.${field} は空でない文字列である必要があります`);
+              }
+            }
+            if (!isNonNegativeFinite(ec.priceExTax)) {
+              errors.push('resultPage.emptyState.card.priceExTax は 0 以上の有限な数値である必要があります');
+            }
+            if ('priceSuffix' in ec && typeof ec.priceSuffix !== 'string') {
+              errors.push('resultPage.emptyState.card.priceSuffix は文字列である必要があります');
+            }
+            // 総合点は 0..100 に正規化されるため、それを超える下限は設定ミス。
+            if (
+              'minScore' in ec &&
+              (!isNonNegativeFinite(ec.minScore) || (ec.minScore as number) > 100)
+            ) {
+              errors.push(
+                'resultPage.emptyState.card.minScore は 0 以上 100 以下の数値である必要があります',
+              );
+            }
+          }
+        }
       }
     }
     // I4: discount(任意)。rate は 0 < rate < 1 の数値、ラベル類は文字列。

@@ -339,6 +339,8 @@ body {
 .dx-msg { background: var(--dx-surface); border: 1px solid var(--dx-line); padding: 13px 15px;
   font-size: 13px; line-height: 1.8; color: var(--dx-ink-2); }
 .dx-empty { text-align: center; }
+/* 空状態の文言のあとに提案カードが続くときだけ間隔を空ける */
+.dx-empty + .dx-reco-list { margin-top: 10px; }
 .dx-empty-msg { font-size: 14px; line-height: 1.8; color: var(--dx-ink-2); }
 .dx-empty-cta { margin-top: 8px; font-size: 12px; color: var(--dx-ink-dim); }
 

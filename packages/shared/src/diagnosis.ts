@@ -192,9 +192,31 @@ export interface DiagnosisSoftCta {
   subText: string;
 }
 
+/**
+ * 立ちタグ 0 件のときに 1 枚だけ提案するカード(任意)。悩みが無い人にも次の一手を
+ * 出すための枠で、通常のおすすめカードと同じ経路(税込計算・割引)に載る。
+ */
+export interface DiagnosisEmptyStateCard {
+  /** どの軸の提案として扱うか。定義の axes に存在する id。 */
+  axisId: string;
+  title: string;
+  priceExTax: number;
+  /** "＋" 付きメニュー用。省略時は空文字。 */
+  priceSuffix?: string;
+  reason: string;
+  /**
+   * このカードを出す総合点の下限(任意・省略時は下限なし)。悩みタグは「設問の
+   * 清潔度が閾値以下」で立つため、立ちタグ 0 件は満点とは限らない(中位の点でも
+   * 起こりうる)。上位者だけに出したいときはここで絞る。
+   */
+  minScore?: number;
+}
+
 export interface DiagnosisEmptyState {
   message: string;
   cta: string;
+  /** 悩みが無い人向けの提案カード(任意)。無ければ従来どおり文言のみ。 */
+  card?: DiagnosisEmptyStateCard;
 }
 
 /**

@@ -371,6 +371,33 @@ export function runDiagnosis(
   const cards = candidates.slice(0, maxTotal);
   const droppedCards = candidates.slice(maxTotal).map((c) => c.axisId);
 
+  // Step 6.3.1: 立ちタグ 0 件(=悩みが無い)のとき、定義に用意があれば提案カードを
+  // 1 枚だけ積む。以降の税込計算・割引・noteRules を通常カードと同じ経路で通す。
+  // 立ちタグ 0 件は満点とは限らない(全設問が閾値超えなら中位の点でも起こる)ため、
+  // minScore を満たさない場合は積まない。maxTotal は通常カードと共通の上限として
+  // 守る(タグ無しでもカードを返すリゾルバ定義では枠が埋まっていることがある)。
+  // 優先順位は「通常カード優先」。空状態でも通常カードが出る定義では両者が並ぶ。
+  const emptyState = standingTags.length === 0;
+  const emptyCard = (definition.resultPage as Partial<DiagnosisResultPage> | undefined)?.emptyState
+    ?.card;
+  if (
+    emptyState &&
+    emptyCard &&
+    cards.length < maxTotal &&
+    totalScore >= (emptyCard.minScore ?? 0)
+  ) {
+    cards.push({
+      axisId: emptyCard.axisId,
+      title: emptyCard.title,
+      priceExTax: emptyCard.priceExTax,
+      priceInTax: 0, // Step 7 で確定
+      priceSuffix: emptyCard.priceSuffix ?? '',
+      reason: emptyCard.reason,
+      extras: [],
+      notes: [],
+    });
+  }
+
   // Step 7: 税込計算(最終カードのみ)
   const taxRate = definition.resultPage.taxRate;
   for (const card of cards) {
@@ -400,9 +427,6 @@ export function runDiagnosis(
       }
     }
   }
-
-  // Step 6.4: 空状態(立ちタグ 0 件)
-  const emptyState = standingTags.length === 0;
 
   // Step 8: 表示用スナップショット(02 データモデル: definition を再参照せず結果を
   // 再構成できるよう、表示に必要な definition 由来文言を焼き込む)。validator は

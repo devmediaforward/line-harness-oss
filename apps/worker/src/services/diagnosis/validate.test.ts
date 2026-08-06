@@ -207,6 +207,66 @@ describe('validateDefinition — 構造検査(型崩れ)', () => {
     expect(errors.some((e: string) => e.includes('emptyState'))).toBe(true);
   });
 
+  it('resultPage.emptyState.card が妥当なら通る', () => {
+    const def = clone();
+    def.resultPage.emptyState.card = {
+      axisId: 'skin',
+      title: '美肌極みコース',
+      priceExTax: 20000,
+      reason: 'さらに上へ',
+    };
+    expect(validateDefinition(def)).toEqual([]);
+  });
+
+  it('resultPage.emptyState.card.axisId が axes に無い → エラー', () => {
+    const def = clone();
+    def.resultPage.emptyState.card = {
+      axisId: 'nope',
+      title: '美肌極みコース',
+      priceExTax: 20000,
+      reason: 'さらに上へ',
+    };
+    const errors = validateDefinition(def);
+    expect(errors.some((e: string) => e.includes('emptyState.card.axisId'))).toBe(true);
+  });
+
+  it('resultPage.emptyState.card.priceExTax が数値でない → エラー', () => {
+    const def = clone();
+    def.resultPage.emptyState.card = {
+      axisId: 'skin',
+      title: '美肌極みコース',
+      priceExTax: '20000',
+      reason: 'さらに上へ',
+    };
+    const errors = validateDefinition(def);
+    expect(errors.some((e: string) => e.includes('emptyState.card.priceExTax'))).toBe(true);
+  });
+
+  it('resultPage.emptyState.card.minScore が 100 を超える → エラー', () => {
+    const def = clone();
+    def.resultPage.emptyState.card = {
+      axisId: 'skin',
+      title: '美肌極みコース',
+      priceExTax: 20000,
+      reason: 'さらに上へ',
+      minScore: 101,
+    };
+    const errors = validateDefinition(def);
+    expect(errors.some((e: string) => e.includes('emptyState.card.minScore'))).toBe(true);
+  });
+
+  it('resultPage.emptyState.card.minScore が 0..100 なら通る', () => {
+    const def = clone();
+    def.resultPage.emptyState.card = {
+      axisId: 'skin',
+      title: '美肌極みコース',
+      priceExTax: 20000,
+      reason: 'さらに上へ',
+      minScore: 100,
+    };
+    expect(validateDefinition(def)).toEqual([]);
+  });
+
   it('resultPage は taxRate のみでも(任意フィールド未指定)エラーにしない', () => {
     const def = clone();
     def.resultPage = { taxRate: 0.1 };

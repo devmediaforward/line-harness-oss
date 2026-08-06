@@ -149,7 +149,9 @@ export default function BasicSettingsTab({
         weakPointTexts,
         softCta: { text: softCtaText, subText: softCtaSubText },
         minorNotice,
-        emptyState: { message: emptyMessage, cta: emptyCta },
+        // このタブが編集するのは message / cta だけ。card など他タブ・定義直編集で
+        // 入った項目を保存のたびに落とさないよう、既存を展開してから上書きする。
+        emptyState: { ...def.resultPage.emptyState, message: emptyMessage, cta: emptyCta },
       },
       share: {
         ...def.share,
