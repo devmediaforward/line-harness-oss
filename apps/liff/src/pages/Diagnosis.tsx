@@ -15,7 +15,8 @@ import {
   BAND_NAVY,
   estimateMinutes,
   groundOffset,
-  rankColor,
+  onBandColors,
+  rankBandColor,
   ringBrightness,
   ringScale,
   symmetricLayout,
@@ -57,6 +58,15 @@ function heroFigures(intro: DiagnosisIntro | undefined): Array<{ rank: string; u
           .reverse()
           .map(([rank, url]) => ({ rank, url }));
   return rows.filter((r): r is { rank: string; url: string } => isHttpsUrl(r.url));
+}
+
+/**
+ * ランクバッジ（丸）の配色。結果ページの帯と同じ地色を使い、キャラと色を揃える。
+ * 淡い地色では白抜き文字が読めないため、文字色は帯と同じ規則で反転させる。
+ */
+function badgeStyle(rank: string, index: number): CSSProperties {
+  const bg = rankBandColor(rank, index);
+  return { background: bg, color: onBandColors(bg).text };
 }
 
 // A5: 採点中演出。4軸のマークが順に点灯 → 応答が 3 秒を超えたら通常スピナーへ。
@@ -316,10 +326,7 @@ export default function Diagnosis() {
                       )}
                       <div className="dx-rank-body">
                         <div className="dx-rank-head">
-                          <span
-                            className="dx-rank-badge"
-                            style={{ background: rankColor(r.rank, previews.length - 1 - i) }}
-                          >
+                          <span className="dx-rank-badge" style={badgeStyle(r.rank, previews.length - 1 - i)}>
                             {r.rank}
                           </span>
                           <span className="dx-rank-title">{r.title}</span>

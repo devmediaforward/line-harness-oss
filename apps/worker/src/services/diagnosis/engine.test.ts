@@ -545,6 +545,156 @@ describe('G. 表示スナップショット', () => {
     });
     expect(res.weakPoints).toEqual([]);
   });
+
+  it('G5: emptyState.card — 悩み0件のとき提案カードを1枚積み、税込・割引を通常カードと同じに計算する', () => {
+    const withCard = {
+      ...def,
+      resultPage: {
+        ...def.resultPage,
+        discount: { rate: 0.4 },
+        emptyState: {
+          ...def.resultPage.emptyState,
+          card: { axisId: 'skin', title: '美肌極みコース', priceExTax: 20000, reason: 'さらに上へ' },
+        },
+      },
+    };
+    const res = runDiagnosis(withCard, answersWith()); // タグ0
+    expect(res.emptyState).toBe(true);
+    expect(res.cards).toHaveLength(1);
+    expect(res.cards[0]).toMatchObject({
+      axisId: 'skin',
+      title: '美肌極みコース',
+      priceExTax: 20000,
+      priceInTax: 22000, // taxRate 0.1
+      discountedPriceInTax: 13200, // floor(22000 * 0.6)
+      priceSuffix: '',
+      extras: [],
+      notes: [],
+    });
+  });
+
+  it('G5: emptyState.card — 悩みがあるときは積まない(通常のおすすめだけ)', () => {
+    const withCard = {
+      ...def,
+      resultPage: {
+        ...def.resultPage,
+        emptyState: {
+          ...def.resultPage.emptyState,
+          card: { axisId: 'skin', title: '美肌極みコース', priceExTax: 20000, reason: 'さらに上へ' },
+        },
+      },
+    };
+    const res = runDiagnosis(withCard, answersWith({ S1: 5, S2: 5 }));
+    expect(res.emptyState).toBe(false);
+    expect(res.cards.some((c) => c.title === '美肌極みコース')).toBe(false);
+  });
+
+  it('G5: emptyState.card 未設定なら従来どおりカード0枚', () => {
+    const res = runDiagnosis(def, answersWith());
+    expect(res.emptyState).toBe(true);
+    expect(res.cards).toHaveLength(0);
+  });
+
+  // 立ちタグ 0 件は満点とは限らない: 全設問が閾値超え(全問3)なら 50 点でも空状態になる。
+  it('G6: emptyState.card.minScore — 下限に満たない空状態では積まない', () => {
+    const withCard = {
+      ...def,
+      resultPage: {
+        ...def.resultPage,
+        emptyState: {
+          ...def.resultPage.emptyState,
+          card: {
+            axisId: 'skin',
+            title: '美肌極みコース',
+            priceExTax: 20000,
+            reason: 'さらに上へ',
+            minScore: 100,
+          },
+        },
+      },
+    };
+    const mid = runDiagnosis(withCard, uniformAnswers(3)); // 全問3 → 立ちタグ0・50点
+    expect(mid.emptyState).toBe(true);
+    expect(mid.totalScore).toBe(50);
+    expect(mid.cards).toHaveLength(0);
+
+    const perfect = runDiagnosis(withCard, answersWith()); // 満点
+    expect(perfect.totalScore).toBe(100);
+    expect(perfect.cards).toHaveLength(1);
+  });
+
+  it('G6: minScore 未指定・0 は下限なしとして働く', () => {
+    const mk = (minScore?: number) => ({
+      ...def,
+      resultPage: {
+        ...def.resultPage,
+        emptyState: {
+          ...def.resultPage.emptyState,
+          card: {
+            axisId: 'skin',
+            title: '美肌極みコース',
+            priceExTax: 20000,
+            reason: 'さらに上へ',
+            ...(minScore === undefined ? {} : { minScore }),
+          },
+        },
+      },
+    });
+    expect(runDiagnosis(mk(), uniformAnswers(3)).cards).toHaveLength(1); // 50点でも出る
+    expect(runDiagnosis(mk(0), uniformAnswers(3)).cards).toHaveLength(1);
+  });
+
+  // 立ちタグ 0 件でも通常カードが出る定義（タグ非依存のリゾルバ）はありうる。
+  // その場合の優先順位は「通常カード優先・枠が余っていれば提案カードも並ぶ」。
+  it('G6: 通常カードで枠が埋まっていれば積まない / 空きがあれば末尾に並ぶ', () => {
+    const alwaysCard: PriorityRulesResolver = {
+      type: 'priorityRules',
+      rules: [
+        {
+          id: 'always',
+          if: { always: true },
+          card: { title: '常時カード', priceExTax: 1000, reason: 'r' } as ResolverCard,
+        },
+      ],
+    };
+    const base = {
+      ...def,
+      recommendation: {
+        ...def.recommendation,
+        resolvers: { ...def.recommendation.resolvers, skin: alwaysCard },
+      },
+      resultPage: {
+        ...def.resultPage,
+        emptyState: {
+          ...def.resultPage.emptyState,
+          card: { axisId: 'skin', title: '美肌極みコース', priceExTax: 20000, reason: 'さらに上へ' },
+        },
+      },
+    };
+    const full = runDiagnosis({ ...base, recommendation: { ...base.recommendation, maxTotal: 1 } }, answersWith());
+    expect(full.emptyState).toBe(true);
+    expect(full.cards.map((c) => c.title)).toEqual(['常時カード']);
+
+    const room = runDiagnosis({ ...base, recommendation: { ...base.recommendation, maxTotal: 2 } }, answersWith());
+    expect(room.cards.map((c) => c.title)).toEqual(['常時カード', '美肌極みコース']);
+  });
+
+  it('G6: maxTotal の枠は通常カードと共有する(枠が 0 なら積まない)', () => {
+    const withCard = {
+      ...def,
+      recommendation: { ...def.recommendation, maxTotal: 0 },
+      resultPage: {
+        ...def.resultPage,
+        emptyState: {
+          ...def.resultPage.emptyState,
+          card: { axisId: 'skin', title: '美肌極みコース', priceExTax: 20000, reason: 'さらに上へ' },
+        },
+      },
+    };
+    const res = runDiagnosis(withCard, answersWith()); // 満点・空状態
+    expect(res.emptyState).toBe(true);
+    expect(res.cards).toHaveLength(0);
+  });
 });
 
 // =============================================================================
