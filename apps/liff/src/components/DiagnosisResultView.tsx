@@ -1,5 +1,5 @@
 import liff from '@line/liff';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import type {
   DiagnosisResult,
   DiagnosisResultAxisScore,
@@ -11,7 +11,7 @@ import type {
 } from '../lib/api.js';
 import DiagnosisBandCurve from './DiagnosisBandCurve.js';
 import { prefersReducedMotion } from '../lib/motion.js';
-import { rankColor } from '../lib/diagnosis-theme.js';
+import { onBandColors, rankBandColor, rankColor } from '../lib/diagnosis-theme.js';
 
 // =============================================================================
 // 診断 結果表示（画面3）— Diagnosis.tsx（回答直後）と DiagnosisResult.tsx（再表示）
@@ -389,7 +389,20 @@ export default function DiagnosisResultView({
   shareUrl: string;
   submissionId: string;
 }) {
-  const accent = rankColor(result.rank);
+  // 配色はランクが変われば十分。スコアのカウントアップ等で毎フレーム再レンダリングが
+  // 走るため、輝度計算を巻き込まないようここでまとめて確定させる。
+  const { accent, bandStyle } = useMemo(() => {
+    const band = rankBandColor(result.rank); // 帯の地色（ランク画像の下地と同色）
+    const onBand = onBandColors(band);
+    return {
+      accent: rankColor(result.rank), // レーダーの線・頂点（白い紙面の上なので濃色）
+      bandStyle: {
+        background: band,
+        color: onBand.text,
+        '--dx-on-band-dim': onBand.dim,
+      } as CSSProperties,
+    };
+  }, [result.rank]);
 
   // 初回表示のみ演出する（同一 submission の再表示・reduced motion では静止表示）。
   const [animate] = useState(() => {
@@ -437,8 +450,8 @@ export default function DiagnosisResultView({
     <div className="dx-result">
       {showConfetti && <Confetti />}
 
-      {/* 1. ヒーロー: ランク色の帯 + キャラ画像 or ランク文字（R1/R2/R6） */}
-      <header className="dx-band" style={{ background: accent }}>
+      {/* 1. ヒーロー: ランク画像の下地色の帯 + キャラ画像 or ランク文字（R1/R2/R6） */}
+      <header className="dx-band" style={bandStyle}>
         <div className="dx-band-inner">
           {result.diagnosisName && <p className="dx-band-eyebrow">{result.diagnosisName}</p>}
           <h1 className={`dx-band-title dx-band-title-xl${animate ? ' dx-anim' : ''}`}>{result.rankTitle}</h1>

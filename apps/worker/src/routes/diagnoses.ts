@@ -219,13 +219,20 @@ function truncateShare(s: string, max: number): string {
   return s.length > max ? s.slice(0, max) : s;
 }
 
-/** ランク別アクセント配色(D→S)。LIFF 結果ページ(DiagnosisResultView)と同トーン。 */
-const SHARE_RANK_THEME: Record<string, { gradient: string; accent: string }> = {
-  D: { gradient: 'linear-gradient(135deg,#9ca3af 0%,#6b7280 100%)', accent: '#6b7280' },
-  C: { gradient: 'linear-gradient(135deg,#d08a52 0%,#9a5a2c 100%)', accent: '#a15c2f' },
-  B: { gradient: 'linear-gradient(135deg,#3b82f6 0%,#1d4ed8 100%)', accent: '#2563eb' },
-  A: { gradient: 'linear-gradient(135deg,#a78bfa 0%,#6d28d9 100%)', accent: '#7c3aed' },
-  S: { gradient: 'linear-gradient(135deg,#f59e0b 0%,#d97706 100%)', accent: '#c2760a' },
+/**
+ * ランク別のヒーロー配色(D→S)。band は LIFF 結果ページ(diagnosis-theme の
+ * RANK_BAND_COLORS)と同値で、ランク画像の下地と揃えて地続きに見せる。
+ * 淡い地色では白文字が読めないため、text/chip/shadow もランクごとに持つ。
+ */
+const SHARE_RANK_THEME: Record<
+  string,
+  { band: string; text: string; chip: string; shadow: string }
+> = {
+  D: { band: '#BFC4CF', text: '#1f2430', chip: 'rgba(31,36,48,0.10)', shadow: 'rgba(0,0,0,0)' },
+  C: { band: '#BED2D0', text: '#1f2430', chip: 'rgba(31,36,48,0.10)', shadow: 'rgba(0,0,0,0)' },
+  B: { band: '#DFEECC', text: '#1f2430', chip: 'rgba(31,36,48,0.10)', shadow: 'rgba(0,0,0,0)' },
+  A: { band: '#A7B6EC', text: '#1f2430', chip: 'rgba(31,36,48,0.10)', shadow: 'rgba(0,0,0,0)' },
+  S: { band: '#53535A', text: '#ffffff', chip: 'rgba(255,255,255,0.22)', shadow: 'rgba(0,0,0,0.18)' },
 };
 const SHARE_DEFAULT_THEME = SHARE_RANK_THEME.D;
 
@@ -323,11 +330,11 @@ ${metaLines.join('\n')}
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Hiragino Sans','Helvetica Neue',system-ui,sans-serif;background:#f5f7f5;color:#1f2937;min-height:100vh;padding:20px 16px}
 .wrap{max-width:420px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
-.hero{border-radius:20px;padding:32px 24px;text-align:center;color:#fff;box-shadow:0 2px 20px rgba(0,0,0,0.08)}
+.hero{border-radius:20px;padding:32px 24px;text-align:center;box-shadow:0 2px 20px rgba(0,0,0,0.08)}
 .rank-img{display:block;width:180px;max-width:64%;height:auto;aspect-ratio:1/1;margin:0 auto 14px;border-radius:16px;object-fit:contain}
-.rank{font-size:72px;font-weight:900;line-height:1;text-shadow:0 2px 8px rgba(0,0,0,0.18)}
+.rank{font-size:72px;font-weight:900;line-height:1;text-shadow:0 2px 8px var(--rank-shadow,rgba(0,0,0,0.18))}
 .rank-title{margin-top:12px;font-size:18px;font-weight:700}
-.score{margin-top:14px;display:inline-block;border-radius:999px;background:rgba(255,255,255,0.22);padding:6px 18px;font-size:14px;font-weight:600}
+.score{margin-top:14px;display:inline-block;border-radius:999px;background:var(--chip,rgba(255,255,255,0.22));padding:6px 18px;font-size:14px;font-weight:600}
 .axes{background:#fff;border-radius:16px;border:1px solid rgba(0,0,0,0.05);overflow:hidden}
 .ax-list{list-style:none}
 .ax-row{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #f1f3f4}
@@ -344,7 +351,7 @@ body{font-family:'Hiragino Sans','Helvetica Neue',system-ui,sans-serif;backgroun
 </head>
 <body>
 <main class="wrap">
-<section class="hero" style="background:${theme.gradient}">
+<section class="hero" style="background:${theme.band};color:${theme.text};--chip:${theme.chip};--rank-shadow:${theme.shadow}">
 ${rankImg}
 <div class="rank">${rank}</div>
 <div class="rank-title">${rankTitle}</div>
