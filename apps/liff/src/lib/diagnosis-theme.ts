@@ -28,6 +28,66 @@ export function rankColor(rank: string, index = 0): string {
   return RANK_COLORS[rank] ?? FALLBACK_RANK_COLORS[index % FALLBACK_RANK_COLORS.length];
 }
 
+/**
+ * ランク名 -> 帯の地色。ランク画像の下地と同じ色を置き、切り抜いたキャラが
+ * 元の絵のまま立っているように見せる。線やバッジには細さ・小ささゆえの視認性が
+ * 要るため RANK_COLORS を使い続け、面で使う地色だけをこちらに分けている。
+ */
+const RANK_BAND_COLORS: Record<string, string> = {
+  D: '#BFC4CF',
+  C: '#BED2D0',
+  B: '#DFEECC',
+  A: '#A7B6EC',
+  S: '#53535A',
+};
+
+/** 帯の上に置く文字色。dim は控えめな行（ランク名・スコア添え字）用。 */
+export interface OnBandColors {
+  text: string;
+  dim: string;
+}
+const ON_BAND_LIGHT: OnBandColors = { text: '#ffffff', dim: 'rgba(255, 255, 255, 0.72)' };
+const ON_BAND_DARK: OnBandColors = { text: '#1f2430', dim: 'rgba(31, 36, 48, 0.8)' };
+
+/** 帯の地色を返す。未知のランクは従来どおりランク色をそのまま地色にする。 */
+export function rankBandColor(rank: string, index = 0): string {
+  return RANK_BAND_COLORS[rank] ?? rankColor(rank, index);
+}
+
+/** #rgb / #rrggbb を 0..255 の三値へ。解釈できなければ null。 */
+function parseHex(hex: string): [number, number, number] | null {
+  const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return null;
+  const s = m[1].length === 3 ? m[1].replace(/./g, (c) => c + c) : m[1];
+  return [parseInt(s.slice(0, 2), 16), parseInt(s.slice(2, 4), 16), parseInt(s.slice(4, 6), 16)];
+}
+
+/** WCAG 2.x の相対輝度。 */
+function relativeLuminance([r, g, b]: [number, number, number]): number {
+  const ch = (v: number): number => {
+    const s = v / 255;
+    return s <= 0.04045 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+  };
+  return 0.2126 * ch(r) + 0.7152 * ch(g) + 0.0722 * ch(b);
+}
+
+const WHITE_LUMINANCE = 1;
+const DARK_LUMINANCE = relativeLuminance(parseHex(ON_BAND_DARK.text) ?? [0, 0, 0]);
+
+/**
+ * 帯色に対してコントラストが高い方の文字色を返す。淡い帯では白が読めず、
+ * 濃い帯では濃色が読めないため、輝度の固定しきい値ではなく比較で決める。
+ * 色を解釈できない場合は従来どおり白（帯色は濃色である前提の実装だったため）。
+ */
+export function onBandColors(bandColor: string): OnBandColors {
+  const rgb = parseHex(bandColor);
+  if (!rgb) return ON_BAND_LIGHT;
+  const l = relativeLuminance(rgb);
+  const ratio = (other: number): number =>
+    (Math.max(l, other) + 0.05) / (Math.min(l, other) + 0.05);
+  return ratio(WHITE_LUMINANCE) >= ratio(DARK_LUMINANCE) ? ON_BAND_LIGHT : ON_BAND_DARK;
+}
+
 /** 設問数からの所要時間概算（分）。1 問あたり 5 秒 + 端数切り上げ。 */
 export function estimateMinutes(questionCount: number): number {
   return Math.max(1, Math.round((questionCount * 5) / 60));

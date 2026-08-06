@@ -369,7 +369,9 @@ body {
 
 /* 紙吹雪(R1・S/A のみ・角丸なし・発光なし・ループなし) */
 .dx-confetti { position: fixed; inset: 0; z-index: 25; overflow: hidden; pointer-events: none; }
+/* 縁取りは、紙吹雪の色（ランク色）と帯の地色が近いランクで紙片が沈まないようにするため。 */
 .dx-confetti-piece { position: absolute; top: -16px; width: 9px; height: 14px; opacity: 0;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.14);
   animation: dx-confetti-fall 1.5s cubic-bezier(0.4, 0.2, 0.7, 1) forwards; }
 
 /* 順次フェードイン(R4)。dx-reveal は「アニメする時だけ」付く → 未付与なら常時可視 */

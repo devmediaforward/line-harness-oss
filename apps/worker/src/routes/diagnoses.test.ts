@@ -1172,6 +1172,29 @@ describe('GET /d/:shareToken', () => {
     expect(html).not.toContain('javascript:');
   });
 
+  // ── ヒーロー配色: ランク画像の下地と同色の地色 + 読める文字色 ────────────────
+  // 期待値は LIFF 側 diagnosis-theme.ts の RANK_BAND_COLORS と同値。片側だけ変えた
+  // ときに気づけるよう、5ランク全件を突き合わせる。
+  test('ヒーローの地色はランクごとにランク画像の下地と同色で、文字色は読める側が選ばれる', async () => {
+    const expected: Record<string, { band: string; text: string }> = {
+      D: { band: '#BFC4CF', text: '#1f2430' },
+      C: { band: '#BED2D0', text: '#1f2430' },
+      B: { band: '#DFEECC', text: '#1f2430' },
+      A: { band: '#A7B6EC', text: '#1f2430' },
+      S: { band: '#53535A', text: '#ffffff' }, // 濃い地色のときだけ白文字
+    };
+    for (const [rank, { band, text }] of Object.entries(expected)) {
+      const result = { ...runDiagnosis(redentDef, answersWith()), rank };
+      dbMocks.getDiagnosisSubmissionByShareToken.mockResolvedValue(makeShareSubmission(result));
+      dbMocks.getDiagnosisById.mockResolvedValue(makeDiagRow());
+      const res = await req('GET', '/d/tok-share');
+      const html = await res.text();
+      expect(html, `rank ${rank}`).toContain(`background:${band}`);
+      expect(html, `rank ${rank}`).toContain(`color:${text}`);
+      expect(html, `rank ${rank}`).not.toContain('linear-gradient'); // グラデーション時代の名残
+    }
+  });
+
   test('R6: rankImageUrl はエスケープされる(属性破壊を無害化)', async () => {
     const result = {
       ...runDiagnosis(redentDef, answersWith()),
