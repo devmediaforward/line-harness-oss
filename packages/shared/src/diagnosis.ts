@@ -200,8 +200,12 @@ export interface DiagnosisEmptyStateCard {
   /** どの軸の提案として扱うか。定義の axes に存在する id。 */
   axisId: string;
   title: string;
-  priceExTax: number;
-  /** "＋" 付きメニュー用。省略時は空文字。 */
+  /**
+   * 税抜価格(任意)。価格が未確定のメニューを先に出したいときは省略できる。
+   * 省略したカードは税込計算・割引の対象外になり、表示側も価格欄ごと出さない。
+   */
+  priceExTax?: number;
+  /** "＋" 付きメニュー用。省略時は空文字。priceExTax が無いときは表示されない。 */
   priceSuffix?: string;
   reason: string;
   /**
@@ -359,8 +363,13 @@ export interface ResultTag {
 export interface ResultCard {
   axisId: string;
   title: string;
-  priceExTax: number;
-  priceInTax: number;
+  /**
+   * 税抜価格。価格を持たないカード(emptyState.card で priceExTax を省いた場合)では
+   * 欠落する。表示側は「価格が無ければ価格欄を出さない」で扱うこと(0 円ではない)。
+   */
+  priceExTax?: number;
+  /** 税込価格 = round(priceExTax * (1+taxRate))。priceExTax が無いカードでは欠落する */
+  priceInTax?: number;
   /** "＋" 付きメニュー用。無い場合は空文字 */
   priceSuffix: string;
   reason: string;
@@ -370,7 +379,10 @@ export interface ResultCard {
   notes: string[];
   /** 自己処理トラブル訴求文(該当時のみ) */
   appeal?: string;
-  /** 割引後の税込価格 = floor(priceInTax * (1 - discount.rate))。discount 未設定なら省略 */
+  /**
+   * 割引後の税込価格 = floor(priceInTax * (1 - discount.rate))。
+   * discount 未設定、または価格を持たないカードでは省略
+   */
   discountedPriceInTax?: number;
 }
 

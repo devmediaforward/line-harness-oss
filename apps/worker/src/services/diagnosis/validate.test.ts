@@ -242,6 +242,28 @@ describe('validateDefinition — 構造検査(型崩れ)', () => {
     expect(errors.some((e: string) => e.includes('emptyState.card.priceExTax'))).toBe(true);
   });
 
+  it('resultPage.emptyState.card.priceExTax を省略しても通る(価格未定のメニュー)', () => {
+    const def = clone();
+    def.resultPage.emptyState.card = {
+      axisId: 'skin',
+      title: '美肌極みコース',
+      reason: 'さらに上へ',
+    };
+    expect(validateDefinition(def)).toEqual([]);
+  });
+
+  it('resultPage.emptyState.card.priceExTax が null → エラー(省略とは区別する)', () => {
+    const def = clone();
+    def.resultPage.emptyState.card = {
+      axisId: 'skin',
+      title: '美肌極みコース',
+      priceExTax: null,
+      reason: 'さらに上へ',
+    };
+    const errors = validateDefinition(def);
+    expect(errors.some((e: string) => e.includes('emptyState.card.priceExTax'))).toBe(true);
+  });
+
   it('resultPage.emptyState.card.minScore が 100 を超える → エラー', () => {
     const def = clone();
     def.resultPage.emptyState.card = {

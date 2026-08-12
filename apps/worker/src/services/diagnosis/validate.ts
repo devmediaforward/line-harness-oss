@@ -624,8 +624,12 @@ function runValidation(input: unknown): string[] {
                 errors.push(`resultPage.emptyState.card.${field} は空でない文字列である必要があります`);
               }
             }
-            if (!isNonNegativeFinite(ec.priceExTax)) {
-              errors.push('resultPage.emptyState.card.priceExTax は 0 以上の有限な数値である必要があります');
+            // 価格は任意。未確定のメニューを先に出せるよう、キーごと省略できる
+            // (省略 = 価格なし。表示側は価格欄を出さない)。
+            if ('priceExTax' in ec && !isNonNegativeFinite(ec.priceExTax)) {
+              errors.push(
+                'resultPage.emptyState.card.priceExTax は 0 以上の有限な数値である必要があります(価格未定なら省略)',
+              );
             }
             if ('priceSuffix' in ec && typeof ec.priceSuffix !== 'string') {
               errors.push('resultPage.emptyState.card.priceSuffix は文字列である必要があります');

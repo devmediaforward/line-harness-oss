@@ -195,8 +195,10 @@ export interface DiagnosisResultTag {
 export interface DiagnosisResultCard {
   axisId: string;
   title: string;
-  priceExTax: number;
-  priceInTax: number;
+  /** 税抜価格。価格未設定のカード（価格未確定のメニュー）では欠落する */
+  priceExTax?: number;
+  /** 税込価格。priceExTax が無いカードでは欠落する（0 円ではなく「価格なし」） */
+  priceInTax?: number;
   priceSuffix: string;
   reason: string;
   extras: string[];

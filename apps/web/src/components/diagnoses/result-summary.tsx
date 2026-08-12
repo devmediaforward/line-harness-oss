@@ -83,8 +83,12 @@ export default function ResultSummary({ result }: { result: DiagnosisResult }) {
                 <div className="flex items-baseline justify-between gap-2">
                   <span className="text-sm font-medium text-gray-900">{c.title}</span>
                   <span className="text-sm text-gray-700 tabular-nums whitespace-nowrap">
-                    {c.priceInTax != null ? `¥${c.priceInTax.toLocaleString()}` : `¥${c.priceExTax?.toLocaleString?.() ?? c.priceExTax}`}
-                    {c.priceSuffix}
+                    {/* 価格を持たないカード（価格未確定のメニュー）は「価格なし」と出す。¥0 にはしない */}
+                    {c.priceInTax != null
+                      ? `¥${c.priceInTax.toLocaleString()}${c.priceSuffix ?? ''}`
+                      : c.priceExTax != null
+                        ? `¥${c.priceExTax.toLocaleString()}${c.priceSuffix ?? ''}`
+                        : '価格なし'}
                   </span>
                 </div>
                 {c.reason && <p className="mt-1 text-xs text-gray-500 whitespace-pre-wrap">{c.reason}</p>}
