@@ -267,12 +267,17 @@ function PriceBlock({
   discount: DiagnosisResultDiscount | undefined;
 }) {
   const suffix = card.priceSuffix === '＋' ? '〜' : '';
+  const priceInTax = typeof card.priceInTax === 'number' ? card.priceInTax : null;
   const discounted = typeof card.discountedPriceInTax === 'number' ? card.discountedPriceInTax : null;
+
+  // 価格を持たないカード（価格未確定のメニュー）は価格欄そのものを出さない。
+  // 0 円として描画しないための分岐であり、¥0 表示は仕様として作らない。
+  if (priceInTax === null) return null;
 
   if (!discount || discounted === null) {
     return (
       <div className="dx-reco-price dx-tnum">
-        ¥{card.priceInTax.toLocaleString()}
+        ¥{priceInTax.toLocaleString()}
         <span className="dx-reco-tax">(税込){suffix}</span>
       </div>
     );
@@ -281,7 +286,7 @@ function PriceBlock({
   return (
     <div className="dx-price">
       <div className="dx-price-was">
-        <span className="dx-price-strike dx-tnum">通常 ¥{card.priceInTax.toLocaleString()}</span>
+        <span className="dx-price-strike dx-tnum">通常 ¥{priceInTax.toLocaleString()}</span>
         {discount.badgeLabel && <span className="dx-price-badge">{discount.badgeLabel}</span>}
       </div>
       <div className="dx-price-now dx-tnum">
@@ -441,6 +446,14 @@ export default function DiagnosisResultView({
   const emptyStateTexts = result.emptyStateTexts ?? { message: EMPTY_STATE_MESSAGE };
   // I4/I5: 割引・予約はスナップショットに載っているときだけ描画する（汎用フォールバックなし）。
   const discount = result.discount;
+  // 割引の案内文は、割引後価格を実際に表示しているカードが 1 枚以上あるときだけ出す。
+  // 価格未確定のカードだけの画面で「◯%OFF」の案内だけが残ると、根拠の無い割引表示に
+  // なるため（景表法）。
+  // 旧スナップショットへの影響: engine.ts の I4 は Step 7.1 と同じ有効レート範囲
+  // (0 < rate < 1) のときだけ discount を焼き込むため、カードが 1 枚でもあれば必ず
+  // 割引後価格を持つ = 表示は変わらない。唯一変わるのは cards が空の結果で、この場合
+  // 割引する対象が無いので notice も出さない（意図した変更）。
+  const hasDiscountedCard = result.cards.some((c) => typeof c.discountedPriceInTax === 'number');
   const booking =
     result.booking && typeof result.booking.url === 'string' && result.booking.url.startsWith('https://')
       ? result.booking
@@ -545,7 +558,9 @@ export default function DiagnosisResultView({
         {/* 6. あなたへのおすすめ（cards / axisMessages / emptyState・R4） */}
         <section className="dx-sec">
           <h2 className="dx-sec-h">{RECOMMEND_HEADING}</h2>
-          {discount?.notice && <p className="dx-discount-notice">{discount.notice}</p>}
+          {discount?.notice && hasDiscountedCard && (
+            <p className="dx-discount-notice">{discount.notice}</p>
+          )}
           {/* 空状態の文言は「悩みが立たなかった」ことの説明。定義に提案カードが
               用意されていれば、その下に通常のおすすめと同じ体裁で 1 枚並ぶ。 */}
           {result.emptyState && (

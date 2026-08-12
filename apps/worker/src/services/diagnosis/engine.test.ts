@@ -573,6 +573,50 @@ describe('G. 表示スナップショット', () => {
     });
   });
 
+  it('G5: emptyState.card — priceExTax 省略時は価格を持たせない(割引も付けない)', () => {
+    const withCard = {
+      ...def,
+      resultPage: {
+        ...def.resultPage,
+        discount: { rate: 0.4 },
+        emptyState: {
+          ...def.resultPage.emptyState,
+          // 価格未確定のメニュー: priceExTax をキーごと省略する
+          card: { axisId: 'skin', title: '美肌極みコース', reason: 'さらに上へ' },
+        },
+      },
+    };
+    const res = runDiagnosis(withCard, answersWith()); // タグ0
+    expect(res.cards).toHaveLength(1);
+    const card = res.cards[0];
+    expect(card).toMatchObject({ axisId: 'skin', title: '美肌極みコース', priceSuffix: '' });
+    // 0 円ではなく「価格なし」。税込計算も割引も通さない
+    expect(card.priceExTax).toBeUndefined();
+    expect(card.priceInTax).toBeUndefined();
+    expect(card.discountedPriceInTax).toBeUndefined();
+  });
+
+  it('G5: emptyState.card — 価格ありカードと priceSuffix の扱いは従来どおり', () => {
+    const withCard = {
+      ...def,
+      resultPage: {
+        ...def.resultPage,
+        emptyState: {
+          ...def.resultPage.emptyState,
+          card: {
+            axisId: 'skin',
+            title: '美肌極みコース',
+            priceExTax: 20000,
+            priceSuffix: '＋',
+            reason: 'さらに上へ',
+          },
+        },
+      },
+    };
+    const res = runDiagnosis(withCard, answersWith());
+    expect(res.cards[0]).toMatchObject({ priceExTax: 20000, priceInTax: 22000, priceSuffix: '＋' });
+  });
+
   it('G5: emptyState.card — 悩みがあるときは積まない(通常のおすすめだけ)', () => {
     const withCard = {
       ...def,
@@ -743,7 +787,9 @@ describe('I. 割引・予約の焼き込み (I4/I5)', () => {
     const res = runDiagnosis(d, cardAnswers);
     expect(res.cards.length).toBeGreaterThan(0);
     for (const card of res.cards) {
-      expect(card.discountedPriceInTax).toBe(Math.floor(card.priceInTax * (1 - 0.4)));
+      // 通常のリゾルバ由来カードは必ず価格を持つ(価格なしは emptyState.card 限定)
+      expect(typeof card.priceInTax).toBe('number');
+      expect(card.discountedPriceInTax).toBe(Math.floor((card.priceInTax as number) * (1 - 0.4)));
     }
   });
 

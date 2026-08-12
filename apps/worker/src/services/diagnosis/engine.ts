@@ -386,21 +386,28 @@ export function runDiagnosis(
     cards.length < maxTotal &&
     totalScore >= (emptyCard.minScore ?? 0)
   ) {
-    cards.push({
+    const card: ResultCard = {
       axisId: emptyCard.axisId,
       title: emptyCard.title,
-      priceExTax: emptyCard.priceExTax,
-      priceInTax: 0, // Step 7 で確定
       priceSuffix: emptyCard.priceSuffix ?? '',
       reason: emptyCard.reason,
       extras: [],
       notes: [],
-    });
+    };
+    // 価格が未確定のメニューは priceExTax を省いて定義できる。価格を持たせない
+    // (0 円ではなく「価格なし」)ため、以降の税込計算・割引の対象からも外れる。
+    if (typeof emptyCard.priceExTax === 'number') {
+      card.priceExTax = emptyCard.priceExTax;
+      card.priceInTax = 0; // Step 7 で確定
+    }
+    cards.push(card);
   }
 
   // Step 7: 税込計算(最終カードのみ)
   const taxRate = definition.resultPage.taxRate;
   for (const card of cards) {
+    // 価格を持たないカード(価格未確定のメニュー)は税込計算の対象外
+    if (typeof card.priceExTax !== 'number') continue;
     card.priceInTax = Math.round(card.priceExTax * (1 + taxRate));
   }
 
@@ -409,6 +416,8 @@ export function runDiagnosis(
   const discountRate = definition.resultPage.discount?.rate;
   if (typeof discountRate === 'number' && discountRate > 0 && discountRate < 1) {
     for (const card of cards) {
+      // 価格が無ければ割引後価格も出さない(¥0 の割引表示を作らない)
+      if (typeof card.priceInTax !== 'number') continue;
       card.discountedPriceInTax = floorYen(card.priceInTax * (1 - discountRate));
     }
   }
