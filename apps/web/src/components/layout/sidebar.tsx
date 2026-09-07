@@ -252,11 +252,9 @@ export default function Sidebar() {
       {/* ロゴ */}
       <div className="px-6 py-5 border-b border-gray-200">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-sm" style={{ backgroundColor: '#06C755' }}>
-            H
-          </div>
+          <img src="/redent-logo.png" alt="Re'Dent" className="w-8 h-8 rounded-lg" />
           <div>
-            <p className="text-sm font-bold text-gray-900 leading-tight">L Harness</p>
+            <p className="text-sm font-bold text-gray-900 leading-tight">Re&apos;Dent</p>
             <p className="text-xs text-gray-400">管理画面</p>
           </div>
         </div>
@@ -328,7 +326,7 @@ export default function Sidebar() {
         )}
         <div className="px-6 py-4 space-y-3">
         <div className="space-y-0.5">
-          <p className="text-xs text-gray-400">L Harness v{appVersion}</p>
+          <p className="text-xs text-gray-400">Re&apos;Dent v{appVersion}</p>
           <p className="text-[10px] text-gray-400 font-mono break-all">
             build {appCommitSha}{appBuildDate ? ` · ${appBuildDate}` : ''}
           </p>
@@ -381,8 +379,8 @@ export default function Sidebar() {
           </svg>
         </button>
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white font-bold text-xs" style={{ backgroundColor: '#06C755' }}>H</div>
-          <p className="text-sm font-bold text-gray-900">L Harness</p>
+          <img src="/redent-logo.png" alt="Re'Dent" className="w-7 h-7 rounded-lg" />
+          <p className="text-sm font-bold text-gray-900">Re&apos;Dent</p>
         </div>
       </div>
 
