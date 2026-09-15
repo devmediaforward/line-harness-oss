@@ -50,19 +50,26 @@ export async function deleteTag(db: D1Database, id: string): Promise<void> {
   await db.prepare(`DELETE FROM tags WHERE id = ?`).bind(id).run();
 }
 
+/**
+ * friend にタグを付与する（既に付いていれば何もしない）。
+ *
+ * @returns `added` = この呼び出しで新規に付与されたか（既に付いていれば false）。
+ *   呼び出し側が「新規付与のときだけ副作用を走らせる」判断に使う。
+ */
 export async function addTagToFriend(
   db: D1Database,
   friendId: string,
   tagId: string,
-): Promise<void> {
+): Promise<{ added: boolean }> {
   const now = jstNow();
-  await db
+  const result = await db
     .prepare(
       `INSERT OR IGNORE INTO friend_tags (friend_id, tag_id, assigned_at)
        VALUES (?, ?, ?)`,
     )
     .bind(friendId, tagId, now)
     .run();
+  return { added: (result.meta?.changes ?? 0) > 0 };
 }
 
 export async function removeTagFromFriend(

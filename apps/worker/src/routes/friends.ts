@@ -8,6 +8,7 @@ import {
   getFriendTags,
   getScenarios,
   enrollFriendInScenario,
+  resetFriendScenarioEnrollment,
   jstNow,
 } from '@line-crm/db';
 import type { Friend as DbFriend, Tag as DbTag } from '@line-crm/db';
@@ -429,18 +430,34 @@ friends.post('/api/friends/:id/tags', async (c) => {
     }
 
     const db = c.env.DB;
-    await addTagToFriend(db, friendId, body.tagId);
+    // added = この POST で新規に付いたか。既に付いていたタグの再 POST（リトライ・二重送信）
+    // では false になる。
+    // 運用前提: 来店タグの付け直しは「外してから付ける」操作になるため必ず新規付与になる
+    //（管理画面は付与済みタグを再選択できない）。よって added を起点リセットの条件にしても
+    // 来店ごとの再トリガーは取りこぼさない。
+    const { added } = await addTagToFriend(db, friendId, body.tagId);
 
     // Enroll in tag_added scenarios that match this tag
     const allScenarios = await getScenarios(db);
     for (const scenario of allScenarios) {
       if (scenario.trigger_type === 'tag_added' && scenario.is_active && scenario.trigger_tag_id === body.tagId) {
-        const existing = await db
-          .prepare(`SELECT id FROM friend_scenarios WHERE friend_id = ? AND scenario_id = ?`)
-          .bind(friendId, scenario.id)
-          .first();
-        if (!existing) {
-          await enrollFriendInScenario(db, friendId, scenario.id);
+        if (added) {
+          // 新規付与 = 新しい来店イベント → シナリオの起点
+          //（started_at / next_delivery_at）をリセットする。
+          // 0 件になるのは「進行中の登録が無い」「完了済みしか無い」「cron が送信中
+          //（delivering）」のいずれか。その場合は新規 enroll にフォールバックする
+          //（INSERT OR IGNORE + 部分 UNIQUE 索引なので、delivering 行が残っていれば
+          // 索引に弾かれて null を返すだけの no-op）。
+          const reset = await resetFriendScenarioEnrollment(db, friendId, scenario.id);
+          if (!reset) await enrollFriendInScenario(db, friendId, scenario.id);
+        } else {
+          // 既に付いていたタグの再 POST。起点はリセットせず、登録行が 1 つも無いときだけ
+          // 新規 enroll する（従来どおりの挙動）。
+          const existing = await db
+            .prepare(`SELECT id FROM friend_scenarios WHERE friend_id = ? AND scenario_id = ?`)
+            .bind(friendId, scenario.id)
+            .first();
+          if (!existing) await enrollFriendInScenario(db, friendId, scenario.id);
         }
       }
     }

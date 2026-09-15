@@ -32,8 +32,15 @@ export async function attachTagAndFireSideEffects(
       scenario.is_active &&
       scenario.trigger_tag_id === tagId
     ) {
+      // 完了済み (status='completed') の登録は再登録を阻害しない。部分 UNIQUE 索引
+      // idx_friend_scenarios_unique が status != 'completed' のみを対象とするため、
+      // 完了済み行が残っていても新規 INSERT できる (migration 027)。
+      // 進行中の登録が残っている場合は従来どおり重複 enroll を避けるだけ
+      // (起点リセットは手動付与ルートのみの挙動)。
       const existing = await db
-        .prepare(`SELECT id FROM friend_scenarios WHERE friend_id = ? AND scenario_id = ?`)
+        .prepare(
+          `SELECT id FROM friend_scenarios WHERE friend_id = ? AND scenario_id = ? AND status != 'completed'`,
+        )
         .bind(friendId, scenario.id)
         .first();
       if (!existing) {
