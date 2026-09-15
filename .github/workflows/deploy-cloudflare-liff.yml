@@ -34,7 +34,11 @@ jobs:
       - run: pnpm --filter @line-crm/shared build
 
       - name: Build LIFF app
-        run: pnpm --filter liff build
+        # 未設定のまま空文字でビルドが通ると壊れた LIFF が公開されるため、先に必須変数を検査する。
+        run: |
+          test -n "$VITE_LIFF_ID"
+          test -n "$VITE_API_BASE"
+          pnpm --filter liff build
         env:
           VITE_API_BASE: ${{ vars.VITE_API_BASE }}
           # apps/liff は liff-auth.ts で VITE_DEFAULT_LIFF_ID を参照する(?liffId= が無い場合の既定値)。

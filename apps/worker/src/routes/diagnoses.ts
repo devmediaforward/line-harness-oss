@@ -22,6 +22,7 @@ import {
   getDiagnosisSubmissionByRequestId,
   createDiagnosisSubmission,
   getFriendByLineUserId,
+  upsertFriend,
   getLineAccountById,
   addTagToFriend,
   enrollFriendInScenario,
@@ -835,7 +836,49 @@ diagnoses.post('/api/liff/diagnoses/:slug/submissions', async (c) => {
       return c.json({ error: (e as Error).message }, 400);
     }
 
-    const friend = await getFriendByLineUserId(c.env.DB, callerLineUserId);
+    let friend = await getFriendByLineUserId(c.env.DB, callerLineUserId);
+
+    // Webhook 切替前から居る既存友だちは DB に行が無く、副作用(結果 push / タグ付与 /
+    // シナリオ登録)が丸ごとスキップされる。DB に無いときだけ LINE profile を 1 回引いて
+    // 補完する(既存友だちには追加の LINE API 呼び出しを発生させない)。
+    // getProfile 成功 = 友だち(1:1 運用の公式アカウントでは、未友だちがメッセージ履歴を
+    // 持つ経路が無い前提)。upsertFriend は is_following=1 を立てるため成功時のみ呼ぶ。
+    // 失敗(未友だち・トークン未設定等)は従来どおり friend=null のまま進み、submission は
+    // friendId=null で保存され副作用はスキップされる。
+    if (!friend) {
+      // getProfile の失敗(未友だち・トークン未設定等)だけを握りつぶす。
+      let profile: { displayName: string; pictureUrl?: string; statusMessage?: string } | null = null;
+      try {
+        const { LineClient } = await import('@line-crm/line-sdk');
+        profile = await new LineClient(c.env.LINE_CHANNEL_ACCESS_TOKEN).getProfile(
+          callerLineUserId,
+        );
+      } catch {
+        /* 未友だち等は friend=null のまま続行 */
+      }
+
+      if (profile) {
+        try {
+          friend = await upsertFriend(c.env.DB, {
+            lineUserId: callerLineUserId,
+            displayName: profile.displayName,
+            pictureUrl: profile.pictureUrl ?? null,
+            statusMessage: profile.statusMessage ?? null,
+          });
+        } catch (e) {
+          // upsertFriend は SELECT→INSERT なので、同一ユーザーの同時送信で片方が
+          // UNIQUE 違反になる。その場合は相手が作った行を引き直して採用する。
+          if (!isUniqueViolation(e)) {
+            // 一時的な D1 障害等をここで握りつぶすと、friendId=null の submission が
+            // 200 で保存され、requestId 冪等により副作用が永久に失われる。
+            // rethrow して 500 を返し、クライアントに requestId でリトライさせる。
+            throw e;
+          }
+          friend = await getFriendByLineUserId(c.env.DB, callerLineUserId);
+        }
+      }
+    }
+
     const shareToken = crypto.randomUUID();
     let submission: DiagnosisSubmission;
     try {

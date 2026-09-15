@@ -361,14 +361,17 @@ export async function getScenarioSteps(
 // Friend Scenario Enrollments
 // ============================================================
 
-export async function enrollFriendInScenario(
+/**
+ * 登録起点（= いま）から見た第1ステップの next_delivery_at を算出する。
+ * enrollFriendInScenario と resetFriendScenarioEnrollment で共用する内部ヘルパー。
+ *
+ * - scenario が存在しない → null
+ * - ステップが 0 本 → { hasSteps: false, nextDeliveryAt: null }
+ */
+async function computeEnrollmentStart(
   db: D1Database,
-  friendId: string,
   scenarioId: string,
-): Promise<FriendScenario | null> {
-  const id = crypto.randomUUID();
-  const now = jstNow();
-
+): Promise<{ hasSteps: boolean; nextDeliveryAt: string | null } | null> {
   // delivery_mode を取得（migration 037 適用前の DB では 'relative' が DEFAULT で既に入っている）
   const scenarioRow = await db
     .prepare(`SELECT delivery_mode FROM scenarios WHERE id = ?`)
@@ -390,8 +393,30 @@ export async function enrollFriendInScenario(
       delivery_time: string | null;
     }>();
 
+  if (!firstStep) return { hasSteps: false, nextDeliveryAt: null };
+
+  const enrolledAtDate = new Date(Date.now() + 9 * 60 * 60_000);
+  const nextDeliveryDate = computeNextDeliveryAt(
+    { delivery_mode: scenarioRow.delivery_mode },
+    firstStep,
+    { enrolledAt: enrolledAtDate, previousDeliveredAt: enrolledAtDate, now: enrolledAtDate },
+  );
+  return { hasSteps: true, nextDeliveryAt: nextDeliveryDate.toISOString().slice(0, -1) + '+09:00' };
+}
+
+export async function enrollFriendInScenario(
+  db: D1Database,
+  friendId: string,
+  scenarioId: string,
+): Promise<FriendScenario | null> {
+  const id = crypto.randomUUID();
+  const now = jstNow();
+
+  const start = await computeEnrollmentStart(db, scenarioId);
+  if (!start) return null;
+
   // A scenario with no steps is immediately completed — no stuck active enrollment.
-  if (!firstStep) {
+  if (!start.hasSteps) {
     const result = await db
       .prepare(
         `INSERT OR IGNORE INTO friend_scenarios (id, friend_id, scenario_id, current_step_order, status, started_at, next_delivery_at, updated_at)
@@ -408,14 +433,6 @@ export async function enrollFriendInScenario(
       .first<FriendScenario>())!;
   }
 
-  const enrolledAtDate = new Date(Date.now() + 9 * 60 * 60_000);
-  const nextDeliveryDate = computeNextDeliveryAt(
-    { delivery_mode: scenarioRow.delivery_mode },
-    firstStep,
-    { enrolledAt: enrolledAtDate, previousDeliveredAt: enrolledAtDate, now: enrolledAtDate },
-  );
-  const nextDeliveryAt = nextDeliveryDate.toISOString().slice(0, -1) + '+09:00';
-
   // current_step_order is initialized to -1 (NOT 0) so that the step-delivery
   // service's `steps.find(s => s.step_order > fs.current_step_order)` lookup
   // matches the very first step (step_order=0).
@@ -428,7 +445,7 @@ export async function enrollFriendInScenario(
       `INSERT OR IGNORE INTO friend_scenarios (id, friend_id, scenario_id, current_step_order, status, started_at, next_delivery_at, updated_at)
        VALUES (?, ?, ?, -1, 'active', ?, ?, ?)`,
     )
-    .bind(id, friendId, scenarioId, now, nextDeliveryAt, now)
+    .bind(id, friendId, scenarioId, now, start.nextDeliveryAt, now)
     .run();
 
   if (!result.meta.changes || result.meta.changes === 0) return null;
@@ -437,6 +454,69 @@ export async function enrollFriendInScenario(
     .prepare(`SELECT * FROM friend_scenarios WHERE id = ?`)
     .bind(id)
     .first<FriendScenario>())!;
+}
+
+/**
+ * friend の進行中シナリオ登録を「いま登録し直した」状態へ in-place で戻す
+ * （手動タグ付与 = 新しい来店イベント、の起点リセット用）。
+ *
+ * SELECT せず (friend_id, scenario_id) 条件の単一 UPDATE で完結させている:
+ *   - DELETE + INSERT だと途中で失敗したときに配信予定が消えたままになる
+ *   - SELECT → UPDATE だと、その間に cron が status を動かす競合窓ができる
+ *   - 部分 UNIQUE 索引 idx_friend_scenarios_unique（status != 'completed'）により
+ *     非 completed 行は friend+scenario ごとに高々 1 行なので、更新は最大 1 行
+ *
+ * 対象は status が 'active' / 'paused' の行のみ。
+ *   - 'delivering' は step-delivery の cron が claim 済み（送信中）。ここで起点を
+ *     書き換えると古いステップの送信と新しい起点の先頭配信が二重に走るため触らない。
+ *   - 'completed' は対象外（新規 enroll 側に任せる）。
+ *
+ * ステップが 0 本のシナリオは enrollFriendInScenario と同じ「即完了」の意味に揃え、
+ * 進行中行を completed にする（false を返して呼び出し側に enroll させると、
+ * completed の孤児行が増えてしまう。部分索引は completed を弾かない）。
+ *
+ * @returns UPDATE が実際に 1 行を書き換えたら true
+ */
+export async function resetFriendScenarioEnrollment(
+  db: D1Database,
+  friendId: string,
+  scenarioId: string,
+): Promise<boolean> {
+  const start = await computeEnrollmentStart(db, scenarioId);
+  if (!start) return false;
+
+  const now = jstNow();
+
+  if (!start.hasSteps) {
+    const completed = await db
+      .prepare(
+        `UPDATE friend_scenarios
+         SET status = 'completed',
+             next_delivery_at = NULL,
+             updated_at = ?
+         WHERE friend_id = ? AND scenario_id = ? AND status IN ('active', 'paused')`,
+      )
+      .bind(now, friendId, scenarioId)
+      .run();
+    return (completed.meta?.changes ?? 0) > 0;
+  }
+
+  // current_step_order = -1 は enrollFriendInScenario と同じ理由
+  // （step_order=0 の先頭ステップを拾わせるため）。
+  const result = await db
+    .prepare(
+      `UPDATE friend_scenarios
+       SET current_step_order = -1,
+           status = 'active',
+           started_at = ?,
+           next_delivery_at = ?,
+           updated_at = ?
+       WHERE friend_id = ? AND scenario_id = ? AND status IN ('active', 'paused')`,
+    )
+    .bind(now, start.nextDeliveryAt, now, friendId, scenarioId)
+    .run();
+
+  return (result.meta?.changes ?? 0) > 0;
 }
 
 export async function getFriendScenariosDueForDelivery(

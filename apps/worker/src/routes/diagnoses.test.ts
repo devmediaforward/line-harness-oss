@@ -18,6 +18,7 @@ const dbMocks = {
   getDiagnosisSubmissionByRequestId: vi.fn(),
   createDiagnosisSubmission: vi.fn(),
   getFriendByLineUserId: vi.fn(),
+  upsertFriend: vi.fn(),
   getLineAccountById: vi.fn(),
   addTagToFriend: vi.fn(),
   enrollFriendInScenario: vi.fn(),
@@ -29,9 +30,12 @@ vi.mock('@line-crm/db', () => dbMocks);
 const liffAuthMocks = { verifyCallerLineUserId: vi.fn() };
 vi.mock('../services/liff-auth.js', () => liffAuthMocks);
 
-const lineMocks = { pushMessage: vi.fn() };
+const lineMocks = { pushMessage: vi.fn(), getProfile: vi.fn() };
 vi.mock('@line-crm/line-sdk', () => ({
-  LineClient: vi.fn().mockImplementation(() => ({ pushMessage: lineMocks.pushMessage })),
+  LineClient: vi.fn().mockImplementation(() => ({
+    pushMessage: lineMocks.pushMessage,
+    getProfile: lineMocks.getProfile,
+  })),
 }));
 
 const { diagnoses } = await import('./diagnoses.js');
@@ -187,6 +191,7 @@ beforeEach(() => {
     created_at: '2026-07-16T00:00:00+09:00',
   });
   dbMocks.getFriendByLineUserId.mockResolvedValue(null);
+  dbMocks.upsertFriend.mockResolvedValue(makeFriend());
   dbMocks.getLineAccountById.mockResolvedValue(undefined);
   dbMocks.addTagToFriend.mockResolvedValue(undefined);
   dbMocks.enrollFriendInScenario.mockResolvedValue(null);
@@ -194,6 +199,8 @@ beforeEach(() => {
   dbMocks.jstNow.mockReturnValue('2026-07-16T00:00:00+09:00');
   liffAuthMocks.verifyCallerLineUserId.mockResolvedValue(null);
   lineMocks.pushMessage.mockResolvedValue(undefined);
+  // 既定は「未友だち」= getProfile 失敗。friend 補完を検証するテストで個別に上書きする。
+  lineMocks.getProfile.mockRejectedValue(new Error('LINE API error: 404'));
 });
 
 // ── 管理系: 一覧 / CRUD ─────────────────────────────────────────────────────
@@ -650,6 +657,122 @@ describe('POST /api/liff/diagnoses/:slug/submissions', () => {
       expect.objectContaining({ friendId: null, lineUserId: 'U_ghost' }),
     );
     expect(lineMocks.pushMessage).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST submissions: friend 未登録時の profile 補完', () => {
+  test('getProfile 成功 → upsertFriend で friend を作成し副作用が走る', async () => {
+    liffAuthMocks.verifyCallerLineUserId.mockResolvedValue('U_alice');
+    dbMocks.getDiagnosisBySlug.mockResolvedValue(makeDiagRow());
+    dbMocks.getFriendByLineUserId.mockResolvedValue(null);
+    lineMocks.getProfile.mockResolvedValue({
+      userId: 'U_alice',
+      displayName: 'Alice',
+      pictureUrl: 'https://example.com/a.png',
+      statusMessage: 'hi',
+    });
+
+    const res = await req('POST', '/api/liff/diagnoses/redent-cleanliness/submissions', {
+      auth: 'idtoken',
+      body: { answers: answersWith() },
+    });
+
+    expect(res.status).toBe(200);
+    expect(lineMocks.getProfile).toHaveBeenCalledTimes(1);
+    expect(lineMocks.getProfile).toHaveBeenCalledWith('U_alice');
+    expect(dbMocks.upsertFriend).toHaveBeenCalledWith(expect.anything(), {
+      lineUserId: 'U_alice',
+      displayName: 'Alice',
+      pictureUrl: 'https://example.com/a.png',
+      statusMessage: 'hi',
+    });
+    // 補完した friend が submission にも副作用にも使われる
+    expect(dbMocks.createDiagnosisSubmission).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ friendId: 'friend-1' }),
+    );
+    expect(lineMocks.pushMessage).toHaveBeenCalledTimes(1);
+  });
+
+  test('upsertFriend が UNIQUE 違反(同時送信) → 再読した friend で副作用が走る', async () => {
+    liffAuthMocks.verifyCallerLineUserId.mockResolvedValue('U_alice');
+    dbMocks.getDiagnosisBySlug.mockResolvedValue(makeDiagRow());
+    // 1 回目(補完前)は null、2 回目(UNIQUE 違反後の再読)は相手が作った行を返す。
+    dbMocks.getFriendByLineUserId
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(makeFriend({ id: 'friend-raced' }));
+    lineMocks.getProfile.mockResolvedValue({ userId: 'U_alice', displayName: 'Alice' });
+    dbMocks.upsertFriend.mockRejectedValue(
+      new Error('D1_ERROR: UNIQUE constraint failed: friends.line_user_id'),
+    );
+
+    const res = await req('POST', '/api/liff/diagnoses/redent-cleanliness/submissions', {
+      auth: 'idtoken',
+      body: { answers: answersWith() },
+    });
+
+    expect(res.status).toBe(200);
+    expect(dbMocks.getFriendByLineUserId).toHaveBeenCalledTimes(2);
+    expect(dbMocks.createDiagnosisSubmission).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ friendId: 'friend-raced' }),
+    );
+    expect(lineMocks.pushMessage).toHaveBeenCalledTimes(1);
+  });
+
+  test('upsertFriend が一般エラー(D1 障害等) → 500・submission は保存しない', async () => {
+    liffAuthMocks.verifyCallerLineUserId.mockResolvedValue('U_alice');
+    dbMocks.getDiagnosisBySlug.mockResolvedValue(makeDiagRow());
+    dbMocks.getFriendByLineUserId.mockResolvedValue(null);
+    lineMocks.getProfile.mockResolvedValue({ userId: 'U_alice', displayName: 'Alice' });
+    dbMocks.upsertFriend.mockRejectedValue(new Error('D1_ERROR: network error'));
+
+    const res = await req('POST', '/api/liff/diagnoses/redent-cleanliness/submissions', {
+      auth: 'idtoken',
+      body: { answers: answersWith() },
+    });
+
+    // friendId=null の submission を 200 で保存してしまうと、requestId 冪等により
+    // 副作用が永久に失われる。500 にしてリトライさせる。
+    expect(res.status).toBe(500);
+    expect(dbMocks.createDiagnosisSubmission).not.toHaveBeenCalled();
+    expect(lineMocks.pushMessage).not.toHaveBeenCalled();
+  });
+
+  test('getProfile 失敗 → friend は null のまま保存し副作用なし', async () => {
+    liffAuthMocks.verifyCallerLineUserId.mockResolvedValue('U_ghost');
+    dbMocks.getDiagnosisBySlug.mockResolvedValue(makeDiagRow());
+    dbMocks.getFriendByLineUserId.mockResolvedValue(null);
+    lineMocks.getProfile.mockRejectedValue(new Error('LINE API error: 404'));
+
+    const res = await req('POST', '/api/liff/diagnoses/redent-cleanliness/submissions', {
+      auth: 'idtoken',
+      body: { answers: answersWith() },
+    });
+
+    expect(res.status).toBe(200);
+    expect(lineMocks.getProfile).toHaveBeenCalledTimes(1);
+    expect(dbMocks.upsertFriend).not.toHaveBeenCalled();
+    expect(dbMocks.createDiagnosisSubmission).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ friendId: null, lineUserId: 'U_ghost' }),
+    );
+    expect(lineMocks.pushMessage).not.toHaveBeenCalled();
+  });
+
+  test('friend 登録済みなら getProfile を呼ばない(既存友だちの LINE API 呼び出しを増やさない)', async () => {
+    liffAuthMocks.verifyCallerLineUserId.mockResolvedValue('U_alice');
+    dbMocks.getDiagnosisBySlug.mockResolvedValue(makeDiagRow());
+    dbMocks.getFriendByLineUserId.mockResolvedValue(makeFriend());
+
+    const res = await req('POST', '/api/liff/diagnoses/redent-cleanliness/submissions', {
+      auth: 'idtoken',
+      body: { answers: answersWith() },
+    });
+
+    expect(res.status).toBe(200);
+    expect(lineMocks.getProfile).not.toHaveBeenCalled();
+    expect(dbMocks.upsertFriend).not.toHaveBeenCalled();
   });
 });
 
