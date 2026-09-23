@@ -41,6 +41,22 @@ export async function getStaffByApiKey(
     .first<StaffMember>();
 }
 
+/**
+ * Active staff whose email matches case-insensitively. `email` must already be
+ * trimmed and lower-cased by the caller. At most 2 rows are returned so the
+ * caller can tell a unique match from an ambiguous one without a full read.
+ */
+export async function getActiveStaffByEmail(
+  db: D1Database,
+  email: string,
+): Promise<StaffMember[]> {
+  const result = await db
+    .prepare('SELECT * FROM staff_members WHERE is_active = 1 AND LOWER(email) = ? LIMIT 2')
+    .bind(email)
+    .all<StaffMember>();
+  return result.results;
+}
+
 export async function getStaffMembers(db: D1Database): Promise<StaffMember[]> {
   const result = await db
     .prepare('SELECT * FROM staff_members ORDER BY created_at ASC')

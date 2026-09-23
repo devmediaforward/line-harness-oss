@@ -10,6 +10,8 @@ function app() {
   // Stand-in for the remote MCP endpoint: the limiter runs before auth, so all
   // that matters here is the shape of the path.
   a.post('/mcp/:token', (c) => c.json({ success: true }));
+  // Stand-in for the Descope OAuth endpoint (Bearer JWT).
+  a.post('/mcp', (c) => c.json({ success: true }));
   return a;
 }
 
@@ -211,5 +213,58 @@ describe('rate-limit keying for /mcp/:token follows Hono URL decoding', () => {
     // 100 requests spent the shared `ip:` bucket (100/min) for this IP.
     const res = await a.fetch(mcpRequest('', ip, '/mcp/bad%ZZtoken'), env);
     expect(res.status).toBe(429);
+  });
+});
+
+describe('rate-limit keying for JWT Bearer tokens (/mcp OAuth)', () => {
+  // Every Descope token shares the same header segment (and so the same first
+  // 16 chars); only the signature segment differs between tokens.
+  const HEADER = Buffer.from(JSON.stringify({ alg: 'ES384', kid: 'k1', typ: 'JWT' })).toString('base64url');
+  const PAYLOAD = Buffer.from(JSON.stringify({ iss: 'https://api.descope.com', sub: 'U1' })).toString('base64url');
+  const jwt = (signature: string) => `${HEADER}.${PAYLOAD}.${signature}`;
+
+  function jwtRequest(token: string, ip: string): Request {
+    return new Request('https://w.example.com/mcp', {
+      method: 'POST',
+      headers: { 'cf-connecting-ip': ip, Authorization: `Bearer ${token}` },
+    });
+  }
+
+  test('two JWTs with the same header get separate buckets', async () => {
+    const ip = '198.51.100.91';
+    const a = app();
+    const tokenA = jwt('A'.repeat(100) + 'sig-of-token-aaaa');
+    const tokenB = jwt('A'.repeat(100) + 'sig-of-token-bbbb');
+    // Spend token A's whole allowance...
+    for (let i = 0; i < 1000; i++) {
+      expect((await a.fetch(jwtRequest(tokenA, ip), env)).status).toBe(200);
+    }
+    expect((await a.fetch(jwtRequest(tokenA, ip), env)).status).toBe(429);
+    // ...token B, identical up to its signature tail, is unaffected.
+    expect((await a.fetch(jwtRequest(tokenB, ip), env)).status).toBe(200);
+  });
+
+  test('rotating forged JWTs from one IP is stopped exactly at the ip-ceiling', { timeout: 30_000 }, async () => {
+    const ip = '203.0.113.91';
+    const a = app();
+    for (let i = 0; i < 3000; i++) {
+      const res = await a.fetch(jwtRequest(jwt(`forged-signature-${String(i).padStart(6, '0')}`), ip), env);
+      expect(res.status).toBe(200);
+    }
+    const res = await a.fetch(jwtRequest(jwt('forged-signature-last'), ip), env);
+    expect(res.status).toBe(429);
+  });
+
+  test('a token that is not JWT-shaped keeps the first-16-chars key', async () => {
+    const ip = '198.51.100.92';
+    const a = app();
+    // Same first 16 chars, so the original API-key keying shares one bucket.
+    // `a.b.` has an empty segment and is not treated as a JWT either.
+    const first = 'shared-prefix-16-first';
+    const second = 'shared-prefix-16.x.';
+    for (let i = 0; i < 1000; i++) {
+      expect((await a.fetch(jwtRequest(first, ip), env)).status).toBe(200);
+    }
+    expect((await a.fetch(jwtRequest(second, ip), env)).status).toBe(429);
   });
 });

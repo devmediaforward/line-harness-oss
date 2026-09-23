@@ -19,6 +19,7 @@
     "@line-harness/mcp-server": "workspace:*",
     "@line-harness/sdk": "workspace:*",
     "hono": "^4.6.0",
+    "jose": "^6.2.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "@line-harness/update-engine": "workspace:*"

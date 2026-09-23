@@ -107,6 +107,22 @@ function getMcpPathToken(routingPath: string): string | null {
 }
 
 /**
+ * Bucket key for a (still unvalidated) token. A JWT (the `/mcp` OAuth access
+ * token) starts with a header segment that is identical for every token of the
+ * issuer, so keying it by its first 16 chars would put all its users in one
+ * bucket, which anyone could drain with forged tokens. Its signature segment is
+ * unique per token, so JWTs are keyed by the tail of that instead. API keys
+ * keep the original first-16-chars key.
+ */
+function rateLimitTokenKey(token: string): string {
+  const segments = token.split('.');
+  if (segments.length === 3 && segments.every((s) => s.length > 0)) {
+    return `key:jwt:${segments[2].slice(-16)}`;
+  }
+  return `key:${token.slice(0, 16)}`;
+}
+
+/**
  * Resolve the caller's IP. Exported so that code which builds internal
  * loopback requests (the remote MCP endpoint) can copy the *outer* request's
  * resolved IP onto the inner request, keeping the per-IP ceiling accounted to
@@ -186,8 +202,8 @@ export async function rateLimitMiddleware(c: Context<Env>, next: Next): Promise<
       getMcpPathToken(c.req.path) ??
       (authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : getAdminCookieToken(c));
     if (token) {
-      // Use first 16 chars of token as key to avoid storing full secrets
-      key = `key:${token.slice(0, 16)}`;
+      // Use 16 chars of the token as key to avoid storing full secrets
+      key = rateLimitTokenKey(token);
       max = AUTHENTICATED_MAX;
       windowMs = AUTHENTICATED_WINDOW;
       // Bound total per-IP throughput so an attacker cannot bypass the limiter
