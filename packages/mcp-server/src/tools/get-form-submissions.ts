@@ -1,8 +1,8 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getClient } from "../client.js";
+import type { ToolContext } from "../context.js";
 
-export function registerGetFormSubmissions(server: McpServer): void {
+export function registerGetFormSubmissions(server: McpServer, ctx: ToolContext): void {
   server.tool(
     "get_form_submissions",
     "Get all submissions for a specific form. Returns response data with timestamps and friend IDs.",
@@ -11,7 +11,7 @@ export function registerGetFormSubmissions(server: McpServer): void {
     },
     async ({ formId }) => {
       try {
-        const client = getClient();
+        const client = ctx.client;
         const submissions = await client.forms.getSubmissions(formId);
         return {
           content: [

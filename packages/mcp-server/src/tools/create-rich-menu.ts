@@ -1,8 +1,8 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getClient } from "../client.js";
+import type { ToolContext } from "../context.js";
 
-export function registerCreateRichMenu(server: McpServer): void {
+export function registerCreateRichMenu(server: McpServer, ctx: ToolContext): void {
   server.tool(
     "create_rich_menu",
     "Create a LINE rich menu with optional image upload. Provide imageData (base64) to attach the menu image in one step.",
@@ -49,7 +49,7 @@ export function registerCreateRichMenu(server: McpServer): void {
     },
     async ({ name, chatBarText, size, selected, areas, imageData, imageContentType, setAsDefault }) => {
       try {
-        const client = getClient();
+        const client = ctx.client;
         const menu = await client.richMenus.create({
           name,
           chatBarText,

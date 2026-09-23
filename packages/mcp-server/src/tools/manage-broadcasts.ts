@@ -1,8 +1,8 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getClient } from "../client.js";
+import type { ToolContext } from "../context.js";
 
-export function registerManageBroadcasts(server: McpServer): void {
+export function registerManageBroadcasts(server: McpServer, ctx: ToolContext): void {
   server.tool(
     "manage_broadcasts",
     "配信の管理操作。list: 一覧、get: 詳細、create_draft: 下書き作成（送信しない）、update: 更新、send: 送信、send_to_segment: セグメント配信。",
@@ -22,7 +22,7 @@ export function registerManageBroadcasts(server: McpServer): void {
     },
     async ({ action, broadcastId, title, messageType, messageContent, targetType, targetTagId, scheduledAt, segmentConditions, accountId }) => {
       try {
-        const client = getClient();
+        const client = ctx.client;
 
         if (action === "list") {
           const broadcasts = await client.broadcasts.list(accountId ? { accountId } : undefined);

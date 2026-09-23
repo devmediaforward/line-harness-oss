@@ -1,8 +1,8 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getClient } from "../client.js";
+import type { ToolContext } from "../context.js";
 
-export function registerManageAdPlatforms(server: McpServer): void {
+export function registerManageAdPlatforms(server: McpServer, ctx: ToolContext): void {
   server.tool(
     "manage_ad_platforms",
     "Manage ad platform integrations for conversion tracking. Supports Meta (Facebook/Instagram), X (Twitter), Google Ads, and TikTok. Use 'list' to see configured platforms, 'create' to add a new one, 'update' to modify settings, 'delete' to remove, or 'test' to verify the connection.",
@@ -43,7 +43,7 @@ export function registerManageAdPlatforms(server: McpServer): void {
     },
     async ({ action, platformId, name, displayName, config, isActive, eventName, friendId }) => {
       try {
-        const client = getClient();
+        const client = ctx.client;
 
         switch (action) {
           case "list": {

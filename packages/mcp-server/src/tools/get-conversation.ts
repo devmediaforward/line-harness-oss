@@ -1,8 +1,8 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getClient } from "../client.js";
+import type { ToolContext } from "../context.js";
 
-export function registerGetConversation(server: McpServer): void {
+export function registerGetConversation(server: McpServer, ctx: ToolContext): void {
   server.tool(
     "get_conversation",
     "Get message history for a specific friend (both incoming and outgoing). Each message has a `source` field (user/broadcast/scenario/auto_reply/reminder/manual) indicating origin.",
@@ -19,7 +19,7 @@ export function registerGetConversation(server: McpServer): void {
     },
     async ({ friendId, limit, before }) => {
       try {
-        const client = getClient();
+        const client = ctx.client;
         const result = await client.conversations.get({ friendId, limit, before });
         return {
           content: [

@@ -1,12 +1,12 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { getClient } from "../client.js";
+import type { ToolContext } from "../context.js";
 
-export function registerAllResources(server: McpServer): void {
+export function registerAllResources(server: McpServer, ctx: ToolContext): void {
   server.resource(
     "Account Summary",
     "line-harness://account/summary",
     async (_uri) => {
-      const client = getClient();
+      const client = ctx.client;
       const [friendCount, scenarios, tags] = await Promise.all([
         client.friends.count(),
         client.scenarios.list(),
@@ -41,7 +41,7 @@ export function registerAllResources(server: McpServer): void {
     "Active Scenarios",
     "line-harness://scenarios/active",
     async (_uri) => {
-      const client = getClient();
+      const client = ctx.client;
       const scenarios = await client.scenarios.list();
       const active = scenarios.filter(
         (s: { isActive: boolean }) => s.isActive,
@@ -63,7 +63,7 @@ export function registerAllResources(server: McpServer): void {
     "Tags List",
     "line-harness://tags/list",
     async (_uri) => {
-      const client = getClient();
+      const client = ctx.client;
       const tags = await client.tags.list();
 
       return {

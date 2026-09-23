@@ -1,8 +1,8 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getClient } from "../client.js";
+import type { ToolContext } from "../context.js";
 
-export function registerCreateTrackedLink(server: McpServer): void {
+export function registerCreateTrackedLink(server: McpServer, ctx: ToolContext): void {
   server.tool(
     "create_tracked_link",
     "Create a click-tracking link. When clicked, can auto-tag the user, enroll them in a scenario, or send a custom intro message via push.",
@@ -44,7 +44,7 @@ export function registerCreateTrackedLink(server: McpServer): void {
     },
     async ({ name, originalUrl, tagId, scenarioId, introTemplateId, rewardTemplateId, accountId, ogTitle, ogDescription, ogImageUrl }) => {
       try {
-        const client = getClient();
+        const client = ctx.client;
         const link = await client.trackedLinks.create({
           name,
           originalUrl,

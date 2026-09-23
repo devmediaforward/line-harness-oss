@@ -1,8 +1,8 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getClient } from "../client.js";
+import type { ToolContext } from "../context.js";
 
-export function registerGetConversionLogs(server: McpServer): void {
+export function registerGetConversionLogs(server: McpServer, ctx: ToolContext): void {
   server.tool(
     "get_conversion_logs",
     "View ad conversion send logs for a specific platform. Shows the history of conversion events sent to Meta CAPI, X, Google Ads, or TikTok, including status (sent/failed) and error details.",
@@ -20,7 +20,7 @@ export function registerGetConversionLogs(server: McpServer): void {
     },
     async ({ platformId, limit }) => {
       try {
-        const client = getClient();
+        const client = ctx.client;
         const logs = await client.adPlatforms.getLogs(platformId, limit);
 
         const summary = {

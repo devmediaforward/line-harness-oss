@@ -1,8 +1,8 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getClient } from "../client.js";
+import type { ToolContext } from "../context.js";
 
-export function registerCreateForm(server: McpServer): void {
+export function registerCreateForm(server: McpServer, ctx: ToolContext): void {
   server.tool(
     "create_form",
     "Create a form for collecting user responses. Can auto-tag responders and enroll them in scenarios.",
@@ -59,7 +59,7 @@ export function registerCreateForm(server: McpServer): void {
       ogImageUrl,
     }) => {
       try {
-        const client = getClient();
+        const client = ctx.client;
         const form = await client.forms.create({
           name,
           description,

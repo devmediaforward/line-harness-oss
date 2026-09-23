@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getClient } from "../client.js";
+import type { ToolContext } from "../context.js";
 
 interface AccountInfo {
   id: string;
@@ -50,13 +50,12 @@ function previousJstDate(): string {
 }
 
 async function fetchHarnessJson<T>(
-  apiUrl: string,
-  apiKey: string,
+  ctx: ToolContext,
   path: string,
 ): Promise<ApiEnvelope<T>> {
   try {
-    const res = await fetch(`${apiUrl}${path}`, {
-      headers: { Authorization: `Bearer ${apiKey}` },
+    const res = await ctx.fetch(`${ctx.apiUrl}${path}`, {
+      headers: { Authorization: `Bearer ${ctx.apiKey}` },
     });
     const json = (await res.json().catch(() => null)) as ApiEnvelope<T> | null;
     if (!res.ok) {
@@ -80,7 +79,7 @@ async function fetchHarnessJson<T>(
   }
 }
 
-export function registerAccountSummary(server: McpServer): void {
+export function registerAccountSummary(server: McpServer, ctx: ToolContext): void {
   server.tool(
     "account_summary",
     "Get a high-level summary of the LINE account: friend count per account (DB + LINE API stats), active scenarios, recent broadcasts, tags, and forms. Use this to understand the current state before making changes.",
@@ -92,18 +91,12 @@ export function registerAccountSummary(server: McpServer): void {
     },
     async ({ accountId }) => {
       try {
-        const client = getClient();
-        const apiUrl = process.env.LINE_HARNESS_API_URL;
-        const apiKey = process.env.LINE_HARNESS_API_KEY;
-        if (!apiUrl || !apiKey) {
-          throw new Error("LINE_HARNESS_API_URL and LINE_HARNESS_API_KEY are required");
-        }
+        const client = ctx.client;
         const lineFollowersDate = previousJstDate();
 
         // Fetch all LINE accounts
         const accountsData = await fetchHarnessJson<AccountInfo[]>(
-          apiUrl,
-          apiKey,
+          ctx,
           "/api/line-accounts",
         );
         const accounts: AccountInfo[] = accountsData.success
@@ -115,8 +108,7 @@ export function registerAccountSummary(server: McpServer): void {
         for (const acc of accounts) {
           // Use direct API call for per-account count (SDK count() has no params)
           const countData = await fetchHarnessJson<{ count: number }>(
-            apiUrl,
-            apiKey,
+            ctx,
             `/api/friends/count?lineAccountId=${encodeURIComponent(acc.id)}`,
           );
           const lineData = await fetchHarnessJson<{
@@ -126,8 +118,7 @@ export function registerAccountSummary(server: McpServer): void {
             targetedReaches: number | null;
             blocks: number | null;
           }>(
-            apiUrl,
-            apiKey,
+            ctx,
             `/api/line-accounts/${encodeURIComponent(acc.id)}/follower-insight?date=${lineFollowersDate}`,
           );
           const friendsInDb = countData.success ? countData.data?.count ?? null : null;
@@ -182,8 +173,7 @@ export function registerAccountSummary(server: McpServer): void {
         for (const acc of accountStats) {
           try {
             const healthData = await fetchHarnessJson<{ riskLevel: string }>(
-              apiUrl,
-              apiKey,
+              ctx,
               `/api/accounts/${encodeURIComponent(acc.id)}/health`,
             );
             if (healthData.success) {

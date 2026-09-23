@@ -73,7 +73,7 @@ jobs:
         run: pnpm test:scripts
 
       - name: Build shared workspace packages
-        run: pnpm --filter @line-crm/shared --filter @line-crm/line-sdk --filter @line-crm/db --filter @line-harness/update-engine build
+        run: pnpm --filter @line-crm/shared --filter @line-crm/line-sdk --filter @line-crm/db --filter @line-harness/update-engine --filter @line-harness/sdk --filter @line-harness/mcp-server build
 
       - name: Capture build metadata
         id: build-meta

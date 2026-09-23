@@ -1,8 +1,8 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getClient } from "../client.js";
+import type { ToolContext } from "../context.js";
 
-export function registerListConversations(server: McpServer): void {
+export function registerListConversations(server: McpServer, ctx: ToolContext): void {
   server.tool(
     "list_conversations",
     "List unreplied conversations (friends who sent an incoming message with no subsequent human reply). Excludes automated outgoing (broadcast/scenario/auto_reply/reminder) and conversations marked resolved in the admin UI. Results sorted by longest wait first.",
@@ -27,7 +27,7 @@ export function registerListConversations(server: McpServer): void {
     },
     async ({ lineAccountId, minHoursSince, maxHoursSince, limit, offset }) => {
       try {
-        const client = getClient();
+        const client = ctx.client;
         const result = await client.conversations.list({
           lineAccountId,
           minHoursSince,

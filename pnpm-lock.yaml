@@ -124,6 +124,12 @@ importers:
       '@line-crm/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@line-harness/mcp-server':
+        specifier: workspace:*
+        version: link:../../packages/mcp-server
+      '@line-harness/sdk':
+        specifier: workspace:*
+        version: link:../../packages/sdk
       '@line-harness/update-engine':
         specifier: workspace:*
         version: link:../../packages/update-engine

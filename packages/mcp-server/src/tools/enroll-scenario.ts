@@ -1,8 +1,8 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getClient } from "../client.js";
+import type { ToolContext } from "../context.js";
 
-export function registerEnrollScenario(server: McpServer): void {
+export function registerEnrollScenario(server: McpServer, ctx: ToolContext): void {
   server.tool(
     "enroll_in_scenario",
     "Enroll a friend into a scenario. The friend will start receiving the scenario's step messages from step 1.",
@@ -14,7 +14,7 @@ export function registerEnrollScenario(server: McpServer): void {
     },
     async ({ scenarioId, friendId }) => {
       try {
-        const client = getClient();
+        const client = ctx.client;
         const enrollment = await client.scenarios.enroll(scenarioId, friendId);
         return {
           content: [

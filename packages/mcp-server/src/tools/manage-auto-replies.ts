@@ -1,8 +1,8 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getClient } from "../client.js";
+import type { ToolContext } from "../context.js";
 
-export function registerManageAutoReplies(server: McpServer): void {
+export function registerManageAutoReplies(server: McpServer, ctx: ToolContext): void {
   server.tool(
     "manage_auto_replies",
     "自動応答の管理操作。list: 一覧、get: 詳細、create: 作成、update: 更新、delete: 削除。キーワードに一致するメッセージに自動返信する。",
@@ -18,7 +18,7 @@ export function registerManageAutoReplies(server: McpServer): void {
     },
     async ({ action, autoReplyId, keyword, matchType, responseType, responseContent, lineAccountId, isActive }) => {
       try {
-        const client = getClient();
+        const client = ctx.client;
         if (action === "list") {
           const items = await client.autoReplies.list(lineAccountId ?? undefined);
           return { content: [{ type: "text" as const, text: JSON.stringify({ success: true, autoReplies: items }, null, 2) }] };

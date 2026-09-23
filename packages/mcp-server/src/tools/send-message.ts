@@ -1,8 +1,8 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getClient } from "../client.js";
+import type { ToolContext } from "../context.js";
 
-export function registerSendMessage(server: McpServer): void {
+export function registerSendMessage(server: McpServer, ctx: ToolContext): void {
   server.tool(
     "send_message",
     "Send a text, image, or flex message to a specific friend. Use messageType 'image' for standalone image messages, 'flex' for rich card layouts.",
@@ -40,7 +40,7 @@ export function registerSendMessage(server: McpServer): void {
     },
     async ({ friendId, content, messageType, altText, isTest, trackLinks }) => {
       try {
-        const client = getClient();
+        const client = ctx.client;
 
         // Add test label
         let finalContent = content;

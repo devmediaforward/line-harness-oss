@@ -27,6 +27,7 @@ import { sendBookingNotification } from './services/booking-notifier.js';
 import { DEFAULT_ACCOUNT_SETTINGS } from './services/booking-types.js';
 import { authMiddleware } from './middleware/auth.js';
 import { rateLimitMiddleware } from './middleware/rate-limit.js';
+import { createMcpRoute } from './routes/mcp.js';
 import { webhook } from './routes/webhook.js';
 import { friends } from './routes/friends.js';
 import { tags } from './routes/tags.js';
@@ -148,6 +149,13 @@ app.use('*', cors({
 
 // Rate limiting — runs before auth to block abuse early
 app.use('*', rateLimitMiddleware);
+
+// Remote MCP endpoint (POST /mcp/<apiKey>) — carries its credential in the URL
+// path, not an Authorization header, so it authenticates itself and must be
+// mounted BEFORE authMiddleware. It is mounted AFTER rateLimitMiddleware so the
+// limiter still applies. `app.fetch` is handed in so the MCP tools' API calls
+// dispatch inside this isolate instead of becoming billable subrequests.
+app.route('/', createMcpRoute((request, env, executionCtx) => app.fetch(request, env, executionCtx)));
 
 // Auth middleware — skips /webhook and /docs automatically
 app.use('*', authMiddleware);

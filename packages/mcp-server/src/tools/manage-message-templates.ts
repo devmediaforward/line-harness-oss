@@ -1,20 +1,13 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import type { ToolContext } from "../context.js";
 
-function getApiConfig() {
-  const apiUrl = process.env.LINE_HARNESS_API_URL;
-  const apiKey = process.env.LINE_HARNESS_API_KEY;
-  if (!apiUrl || !apiKey) throw new Error("LINE_HARNESS_API_URL and LINE_HARNESS_API_KEY required");
-  return { apiUrl, apiKey };
-}
-
-async function apiCall(path: string, method = "GET", body?: unknown) {
-  const { apiUrl, apiKey } = getApiConfig();
-  const res = await fetch(`${apiUrl}${path}`, {
+async function apiCall(ctx: ToolContext, path: string, method = "GET", body?: unknown) {
+  const res = await ctx.fetch(`${ctx.apiUrl}${path}`, {
     method,
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
+      Authorization: `Bearer ${ctx.apiKey}`,
     },
     ...(body ? { body: JSON.stringify(body) } : {}),
   });
@@ -23,7 +16,7 @@ async function apiCall(path: string, method = "GET", body?: unknown) {
   return data;
 }
 
-export function registerManageMessageTemplates(server: McpServer): void {
+export function registerManageMessageTemplates(server: McpServer, ctx: ToolContext): void {
   server.tool(
     "manage_message_templates",
     "メッセージテンプレートの管理。list: 一覧、get: 詳細取得、create: 作成、update: 更新、delete: 削除。キャンペーン特典メッセージのテンプレートを管理する。",
@@ -37,13 +30,13 @@ export function registerManageMessageTemplates(server: McpServer): void {
     async ({ action, templateId, name, messageType, messageContent }) => {
       try {
         if (action === "list") {
-          const data = await apiCall("/api/message-templates");
+          const data = await apiCall(ctx, "/api/message-templates");
           return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
         }
 
         if (action === "get") {
           if (!templateId) throw new Error("templateId is required for get");
-          const data = await apiCall(`/api/message-templates/${templateId}`);
+          const data = await apiCall(ctx, `/api/message-templates/${templateId}`);
           return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
         }
 
@@ -51,7 +44,7 @@ export function registerManageMessageTemplates(server: McpServer): void {
           if (!name || !messageType || !messageContent) {
             throw new Error("name, messageType, and messageContent are required for create");
           }
-          const data = await apiCall("/api/message-templates", "POST", { name, messageType, messageContent });
+          const data = await apiCall(ctx, "/api/message-templates", "POST", { name, messageType, messageContent });
           return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
         }
 
@@ -61,13 +54,13 @@ export function registerManageMessageTemplates(server: McpServer): void {
           if (name !== undefined) body.name = name;
           if (messageType !== undefined) body.messageType = messageType;
           if (messageContent !== undefined) body.messageContent = messageContent;
-          const data = await apiCall(`/api/message-templates/${templateId}`, "PUT", body);
+          const data = await apiCall(ctx, `/api/message-templates/${templateId}`, "PUT", body);
           return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
         }
 
         if (action === "delete") {
           if (!templateId) throw new Error("templateId is required for delete");
-          const data = await apiCall(`/api/message-templates/${templateId}`, "DELETE");
+          const data = await apiCall(ctx, `/api/message-templates/${templateId}`, "DELETE");
           return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
         }
 

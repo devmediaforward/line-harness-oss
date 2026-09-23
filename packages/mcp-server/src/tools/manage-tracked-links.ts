@@ -1,8 +1,8 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getClient } from "../client.js";
+import type { ToolContext } from "../context.js";
 
-export function registerManageTrackedLinks(server: McpServer): void {
+export function registerManageTrackedLinks(server: McpServer, ctx: ToolContext): void {
   server.tool(
     "manage_tracked_links",
     "トラッキングリンクの管理操作。list: 一覧、update: 更新、delete: 削除。作成は create_tracked_link ツールを使用。",
@@ -35,7 +35,7 @@ export function registerManageTrackedLinks(server: McpServer): void {
     },
     async ({ action, linkId, name, tagId, scenarioId, introTemplateId, rewardTemplateId, accountId, isActive, ogTitle, ogDescription, ogImageUrl }) => {
       try {
-        const client = getClient();
+        const client = ctx.client;
         if (action === "list") {
           const links = await client.trackedLinks.list();
           return { content: [{ type: "text" as const, text: JSON.stringify({ success: true, trackedLinks: links }, null, 2) }] };
