@@ -1,8 +1,8 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getClient } from "../client.js";
+import type { ToolContext } from "../context.js";
 
-export function registerManageScenarios(server: McpServer): void {
+export function registerManageScenarios(server: McpServer, ctx: ToolContext): void {
   server.tool(
     "manage_scenarios",
     "シナリオの管理操作。list: 一覧、get: 詳細（ステップ含む）、update: 更新、delete: 削除、add_step: ステップ追加、update_step: ステップ更新、delete_step: ステップ削除。",
@@ -39,7 +39,7 @@ export function registerManageScenarios(server: McpServer): void {
     },
     async ({ action, scenarioId, stepId, name, description, triggerType, triggerTagId, isActive, stepOrder, delayMinutes, messageType, messageContent, conditionType, conditionValue, nextStepOnFalse, templateId, onReachTagId, accountId }) => {
       try {
-        const client = getClient();
+        const client = ctx.client;
 
         if (action === "list") {
           const scenarios = await client.scenarios.list(accountId ? { accountId } : undefined);

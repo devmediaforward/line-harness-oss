@@ -1,8 +1,8 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getClient } from "../client.js";
+import type { ToolContext } from "../context.js";
 
-export function registerGetLinkClicks(server: McpServer): void {
+export function registerGetLinkClicks(server: McpServer, ctx: ToolContext): void {
   server.tool(
     "get_link_clicks",
     "Get click analytics for a tracked link including total clicks and per-friend click history.",
@@ -11,7 +11,7 @@ export function registerGetLinkClicks(server: McpServer): void {
     },
     async ({ linkId }) => {
       try {
-        const client = getClient();
+        const client = ctx.client;
         const link = await client.trackedLinks.get(linkId);
         return {
           content: [

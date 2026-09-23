@@ -1,8 +1,8 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getClient } from "../client.js";
+import type { ToolContext } from "../context.js";
 
-export function registerListCrmObjects(server: McpServer): void {
+export function registerListCrmObjects(server: McpServer, ctx: ToolContext): void {
   server.tool(
     "list_crm_objects",
     "List all CRM objects of a specific type: scenarios, forms, tags, rich menus, tracked links, or broadcasts.",
@@ -24,7 +24,7 @@ export function registerListCrmObjects(server: McpServer): void {
     },
     async ({ objectType, accountId }) => {
       try {
-        const client = getClient();
+        const client = ctx.client;
         let items: unknown;
 
         switch (objectType) {

@@ -1,8 +1,8 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getClient } from "../client.js";
+import type { ToolContext } from "../context.js";
 
-export function registerManageRichMenus(server: McpServer): void {
+export function registerManageRichMenus(server: McpServer, ctx: ToolContext): void {
   server.tool(
     "manage_rich_menus",
     "リッチメニューの管理操作。list: 一覧取得、delete: 削除、set_default: デフォルト設定。作成は create_rich_menu ツールを使用。",
@@ -12,7 +12,7 @@ export function registerManageRichMenus(server: McpServer): void {
     },
     async ({ action, richMenuId }) => {
       try {
-        const client = getClient();
+        const client = ctx.client;
         if (action === "list") {
           const menus = await client.richMenus.list();
           return { content: [{ type: "text" as const, text: JSON.stringify({ success: true, richMenus: menus }, null, 2) }] };

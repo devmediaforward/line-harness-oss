@@ -27,6 +27,7 @@ import { sendBookingNotification } from './services/booking-notifier.js';
 import { DEFAULT_ACCOUNT_SETTINGS } from './services/booking-types.js';
 import { authMiddleware } from './middleware/auth.js';
 import { rateLimitMiddleware } from './middleware/rate-limit.js';
+import { createMcpRoute } from './routes/mcp.js';
 import { webhook } from './routes/webhook.js';
 import { friends } from './routes/friends.js';
 import { tags } from './routes/tags.js';
@@ -126,6 +127,11 @@ export type Env = {
     WORKER_PUBLIC_URL?: string;
     ADMIN_PUBLIC_URL?: string;
     LIFF_PUBLIC_URL?: string;
+    // Remote MCP OAuth (POST /mcp). Public values, not secrets. Both must be
+    // set (non-empty) to enable it; otherwise /mcp and the protected resource
+    // metadata paths return 404.
+    DESCOPE_MCP_ISSUER?: string; // https://api.descope.com/v1/apps/agentic/<ProjectID>/<MCPServerID>
+    DESCOPE_JWKS_URL?: string;   // https://api.descope.com/<ProjectID>/.well-known/jwks.json
   };
   Variables: {
     staff: { id: string; name: string; role: 'owner' | 'admin' | 'staff' };
@@ -148,6 +154,14 @@ app.use('*', cors({
 
 // Rate limiting — runs before auth to block abuse early
 app.use('*', rateLimitMiddleware);
+
+// Remote MCP endpoints (POST /mcp/<apiKey>, and POST /mcp with a Descope OAuth
+// token plus its /.well-known metadata) — they authenticate themselves with
+// credentials authMiddleware does not understand, so they must be mounted
+// BEFORE authMiddleware. They are mounted AFTER rateLimitMiddleware so the
+// limiter still applies. `app.fetch` is handed in so the MCP tools' API calls
+// dispatch inside this isolate instead of becoming billable subrequests.
+app.route('/', createMcpRoute((request, env, executionCtx) => app.fetch(request, env, executionCtx)));
 
 // Auth middleware — skips /webhook and /docs automatically
 app.use('*', authMiddleware);

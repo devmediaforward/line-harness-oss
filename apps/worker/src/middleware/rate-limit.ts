@@ -73,7 +73,62 @@ function isUnauthenticatedPath(path: string): boolean {
   );
 }
 
-function getClientIp(c: Context): string {
+// The remote MCP endpoint carries its API key in the path (`/mcp/<token>`)
+// because MCP clients that only accept a URL cannot send an Authorization
+// header. Exactly one non-empty segment under `/mcp/`, so no other route is
+// caught and `/mcp/` or `/mcp//` falls back to the IP-keyed branch.
+const MCP_PATH_TOKEN = /^\/mcp\/([^/]+)$/;
+
+/**
+ * Extract the path-borne API key of the remote MCP endpoint, so it can be fed
+ * into the same branch as a Bearer token: the caller then gets the
+ * authenticated allowance *and* inherits the `ip-ceiling` backstop that keeps
+ * rotation of still-unvalidated tokens bounded.
+ *
+ * `routingPath` must be Hono's routing path (`c.req.path`), and the segment is
+ * decoded the way `c.req.param('token')` decodes it, so the bucket key is the
+ * exact value the MCP route authenticates with. Otherwise `/mcp/%65…` and
+ * `/mcp/e…` (or `/m%63p/…`, which Hono still routes to MCP) would land in
+ * different buckets, and so would the outer request and its internal
+ * `Authorization: Bearer <decoded token>` loopback calls.
+ *
+ * A malformed percent escape yields no token, so the request falls back to the
+ * IP-keyed bucket instead of throwing.
+ */
+function getMcpPathToken(routingPath: string): string | null {
+  const segment = MCP_PATH_TOKEN.exec(routingPath)?.[1];
+  if (!segment) return null;
+  if (!segment.includes('%')) return segment;
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Bucket key for a (still unvalidated) token. A JWT (the `/mcp` OAuth access
+ * token) starts with a header segment that is identical for every token of the
+ * issuer, so keying it by its first 16 chars would put all its users in one
+ * bucket, which anyone could drain with forged tokens. Its signature segment is
+ * unique per token, so JWTs are keyed by the tail of that instead. API keys
+ * keep the original first-16-chars key.
+ */
+function rateLimitTokenKey(token: string): string {
+  const segments = token.split('.');
+  if (segments.length === 3 && segments.every((s) => s.length > 0)) {
+    return `key:jwt:${segments[2].slice(-16)}`;
+  }
+  return `key:${token.slice(0, 16)}`;
+}
+
+/**
+ * Resolve the caller's IP. Exported so that code which builds internal
+ * loopback requests (the remote MCP endpoint) can copy the *outer* request's
+ * resolved IP onto the inner request, keeping the per-IP ceiling accounted to
+ * the real client instead of a shared `0.0.0.0` bucket.
+ */
+export function getClientIp(c: Context): string {
   return (
     c.req.header('cf-connecting-ip') ||
     c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ||
@@ -138,12 +193,17 @@ export async function rateLimitMiddleware(c: Context<Env>, next: Next): Promise<
     max = UNAUTHENTICATED_MAX;
     windowMs = UNAUTHENTICATED_WINDOW;
   } else {
-    // Key by API key for authenticated endpoints
+    // Key by API key for authenticated endpoints. `/mcp/<token>` authenticates
+    // with its path token only, so that token wins over any Authorization
+    // header: otherwise an unrelated Bearer value would move the request into
+    // a fresh bucket while the route still authenticates as the path key.
     const authHeader = c.req.header('Authorization');
-    const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : getAdminCookieToken(c);
+    const token =
+      getMcpPathToken(c.req.path) ??
+      (authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : getAdminCookieToken(c));
     if (token) {
-      // Use first 16 chars of token as key to avoid storing full secrets
-      key = `key:${token.slice(0, 16)}`;
+      // Use 16 chars of the token as key to avoid storing full secrets
+      key = rateLimitTokenKey(token);
       max = AUTHENTICATED_MAX;
       windowMs = AUTHENTICATED_WINDOW;
       // Bound total per-IP throughput so an attacker cannot bypass the limiter

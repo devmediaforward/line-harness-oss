@@ -4,17 +4,22 @@ interface HttpClientConfig {
   baseUrl: string
   apiKey: string
   timeout: number
+  fetch?: typeof fetch
 }
 
 export class HttpClient {
   private readonly baseUrl: string
   private readonly apiKey: string
   private readonly timeout: number
+  private readonly fetchImpl: typeof fetch
 
   constructor(config: HttpClientConfig) {
     this.baseUrl = config.baseUrl.replace(/\/$/, '')
     this.apiKey = config.apiKey
     this.timeout = config.timeout
+    // Wrap the global fetch so it is never invoked as a method of this
+    // instance (that throws "Illegal invocation" in browsers/Workers).
+    this.fetchImpl = config.fetch ?? ((input, init) => fetch(input, init))
   }
 
   async get<T = unknown>(path: string): Promise<T> {
@@ -54,7 +59,7 @@ export class HttpClient {
       options.body = JSON.stringify(body)
     }
 
-    const res = await fetch(url, options)
+    const res = await this.fetchImpl(url, options)
 
     if (!res.ok) {
       let errorMessage = `HTTP ${res.status}`

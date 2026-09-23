@@ -1,8 +1,8 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getClient } from "../client.js";
+import type { ToolContext } from "../context.js";
 
-export function registerUploadImage(server: McpServer): void {
+export function registerUploadImage(server: McpServer, ctx: ToolContext): void {
   server.tool(
     "upload_image",
     "Upload an image to get a public URL for use in LINE messages (Flex Message hero images, image messages, etc.). Accepts base64-encoded image data. Returns public URL.",
@@ -16,7 +16,7 @@ export function registerUploadImage(server: McpServer): void {
     },
     async ({ data, mimeType, filename }) => {
       try {
-        const client = getClient();
+        const client = ctx.client;
         const result = await client.images.upload({ data, mimeType, filename });
 
         return {

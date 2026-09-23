@@ -10,6 +10,8 @@ on:
       - 'packages/db/**'
       - 'packages/shared/**'
       - 'packages/line-sdk/**'
+      - 'packages/sdk/**'
+      - 'packages/mcp-server/**'
       - '.github/workflows/deploy-cloudflare-worker.yml'
 
 concurrency: deploy-worker-${{ github.ref }}
@@ -30,7 +32,7 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @line-crm/shared --filter @line-crm/line-sdk --filter @line-crm/db --filter @line-harness/update-engine build
+      - run: pnpm --filter @line-crm/shared --filter @line-crm/line-sdk --filter @line-crm/db --filter @line-harness/update-engine --filter @line-harness/sdk --filter @line-harness/mcp-server build
 
       - name: Run pending D1 migrations
         env:
@@ -85,6 +87,10 @@ jobs:
           # you want dev/prod to use separate buckets (e.g. line-harness-images-dev
           # vs line-harness-images). Unset = keep the wrangler.toml default (shared).
           R2_BUCKET_NAME: ${{ vars.R2_BUCKET_NAME }}
+          # Remote MCP OAuth (POST /mcp, see docs/REMOTE-MCP.md). Public values.
+          # Unset = the feature stays off (/mcp returns 404) and deploy proceeds.
+          DESCOPE_MCP_ISSUER: ${{ vars.DESCOPE_MCP_ISSUER }}
+          DESCOPE_JWKS_URL: ${{ vars.DESCOPE_JWKS_URL }}
         run: |
           test -n "$D1_DATABASE_ID"
           cd apps/worker
@@ -111,6 +117,15 @@ jobs:
               | (if $w != "" then .vars.WORKER_URL = $w else . end)
             ' dist/line_harness/wrangler.json > "$tmp" && mv "$tmp" dist/line_harness/wrangler.json
             echo "Patched admin CORS vars: ADMIN_ORIGIN=$ADMIN_ORIGIN ADMIN_ALLOW_CROSS_SITE=${ADMIN_ALLOW_CROSS_SITE:-true}"
+          fi
+          # Inject the remote MCP OAuth vars only when both are set; the Worker
+          # treats a missing or empty value as "feature disabled".
+          if [ -n "$DESCOPE_MCP_ISSUER" ] && [ -n "$DESCOPE_JWKS_URL" ]; then
+            tmp="$(mktemp)"
+            jq --arg i "$DESCOPE_MCP_ISSUER" --arg j "$DESCOPE_JWKS_URL" '
+              .vars.DESCOPE_MCP_ISSUER = $i
+              | .vars.DESCOPE_JWKS_URL = $j
+            ' dist/line_harness/wrangler.json > "$tmp" && mv "$tmp" dist/line_harness/wrangler.json
           fi
 
       - name: Deploy to Cloudflare Workers

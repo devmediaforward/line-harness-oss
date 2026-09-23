@@ -1,8 +1,8 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getClient } from "../client.js";
+import type { ToolContext } from "../context.js";
 
-export function registerBroadcast(server: McpServer): void {
+export function registerBroadcast(server: McpServer, ctx: ToolContext): void {
   server.tool(
     "broadcast",
     "Send a broadcast message to all friends, a specific tag group, or a filtered segment. Creates and immediately sends the broadcast.",
@@ -66,7 +66,7 @@ export function registerBroadcast(server: McpServer): void {
       trackLinks,
     }) => {
       try {
-        const client = getClient();
+        const client = ctx.client;
 
         if (targetType === "segment" && !segmentConditions) {
           return {

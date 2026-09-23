@@ -4,6 +4,13 @@ export interface LineHarnessConfig {
   apiKey: string
   timeout?: number  // default: 30000ms
   lineAccountId?: string  // default account for multi-account setups
+  /**
+   * Optional fetch implementation. Defaults to the global `fetch`.
+   * Injectable so hosts that must not issue a real network request
+   * (e.g. a Cloudflare Worker calling back into itself) can dispatch
+   * in-process instead.
+   */
+  fetch?: typeof fetch
 }
 
 // ─── API Response ───────────────────────────────────────

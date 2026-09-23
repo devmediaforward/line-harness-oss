@@ -1,8 +1,8 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getClient } from "../client.js";
+import type { ToolContext } from "../context.js";
 
-export function registerManageForms(server: McpServer): void {
+export function registerManageForms(server: McpServer, ctx: ToolContext): void {
   server.tool(
     "manage_forms",
     "フォームの管理操作。list: 一覧、get: 詳細、update: 更新、delete: 削除。作成は create_form ツールを使用。",
@@ -24,7 +24,7 @@ export function registerManageForms(server: McpServer): void {
     },
     async ({ action, formId, name, description, fields, onSubmitTagId, onSubmitScenarioId, onSubmitMessageType, onSubmitMessageContent, saveToMetadata, isActive, ogTitle, ogDescription, ogImageUrl }) => {
       try {
-        const client = getClient();
+        const client = ctx.client;
         if (action === "list") {
           const forms = await client.forms.list();
           return { content: [{ type: "text" as const, text: JSON.stringify({ success: true, forms }, null, 2) }] };

@@ -1,8 +1,8 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getClient } from "../client.js";
+import type { ToolContext } from "../context.js";
 
-export function registerManageFriends(server: McpServer): void {
+export function registerManageFriends(server: McpServer, ctx: ToolContext): void {
   server.tool(
     "manage_friends",
     "友だちの管理操作。count: 友だち数取得、set_metadata: メタデータ更新、set_rich_menu: リッチメニュー割当、remove_rich_menu: リッチメニュー解除。",
@@ -25,7 +25,7 @@ export function registerManageFriends(server: McpServer): void {
     },
     async ({ action, friendId, metadata, richMenuId }) => {
       try {
-        const client = getClient();
+        const client = ctx.client;
 
         if (action === "count") {
           const count = await client.friends.count();

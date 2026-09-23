@@ -1,9 +1,9 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { parseDelay } from "@line-harness/sdk";
-import { getClient } from "../client.js";
+import type { ToolContext } from "../context.js";
 
-export function registerCreateScenario(server: McpServer): void {
+export function registerCreateScenario(server: McpServer, ctx: ToolContext): void {
   server.tool(
     "create_scenario",
     "Create a step delivery scenario with multiple message steps. Each step has a delay and message content. Scenarios auto-trigger on friend_add, tag_added, or manual enrollment.",
@@ -96,7 +96,7 @@ export function registerCreateScenario(server: McpServer): void {
           });
         }
 
-        const client = getClient();
+        const client = ctx.client;
         const scenario = await client.scenarios.create({
           name,
           triggerType,

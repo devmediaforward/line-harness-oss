@@ -1,8 +1,8 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getClient } from "../client.js";
+import type { ToolContext } from "../context.js";
 
-export function registerManageStaff(server: McpServer): void {
+export function registerManageStaff(server: McpServer, ctx: ToolContext): void {
   server.tool(
     "manage_staff",
     "スタッフアカウントの追加・一覧・更新・削除・APIキー再生成。オーナー権限が必要です。",
@@ -18,7 +18,7 @@ export function registerManageStaff(server: McpServer): void {
     },
     async ({ action, name, email, role, staffId, isActive }) => {
       try {
-        const client = getClient();
+        const client = ctx.client;
 
         if (action === "me") {
           const profile = await client.staff.me();

@@ -1,8 +1,8 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getClient } from "../client.js";
+import type { ToolContext } from "../context.js";
 
-export function registerManageTags(server: McpServer): void {
+export function registerManageTags(server: McpServer, ctx: ToolContext): void {
   server.tool(
     "manage_tags",
     "List, create, or delete tags, and add/remove tags to/from friends. Supports batch operations on multiple friends.",
@@ -29,7 +29,7 @@ export function registerManageTags(server: McpServer): void {
     },
     async ({ action, tagName, tagColor, tagId, friendIds }) => {
       try {
-        const client = getClient();
+        const client = ctx.client;
 
         if (action === "list") {
           const tags = await client.tags.list();

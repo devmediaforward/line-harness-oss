@@ -124,12 +124,21 @@ importers:
       '@line-crm/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@line-harness/mcp-server':
+        specifier: workspace:*
+        version: link:../../packages/mcp-server
+      '@line-harness/sdk':
+        specifier: workspace:*
+        version: link:../../packages/sdk
       '@line-harness/update-engine':
         specifier: workspace:*
         version: link:../../packages/update-engine
       hono:
         specifier: ^4.6.0
         version: 4.12.8
+      jose:
+        specifier: ^6.2.2
+        version: 6.2.2
       react:
         specifier: ^19.0.0
         version: 19.2.4
