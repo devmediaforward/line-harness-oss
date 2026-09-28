@@ -22,6 +22,18 @@ jobs:
     environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'development' }}
     runs-on: ubuntu-latest
     steps:
+      # DESCOPE_MCP_ALLOW_ANY_USER lets any Descope user in as the owner, so it
+      # is Dev only. Stop a production deploy before migrations if it is set.
+      - name: Refuse Dev-only vars in production
+        if: github.ref == 'refs/heads/main'
+        env:
+          DESCOPE_MCP_ALLOW_ANY_USER: ${{ vars.DESCOPE_MCP_ALLOW_ANY_USER }}
+        run: |
+          if [ -n "$DESCOPE_MCP_ALLOW_ANY_USER" ]; then
+            echo "::error::DESCOPE_MCP_ALLOW_ANY_USER must not be set in the production environment (it grants owner access to any Descope user)"
+            exit 1
+          fi
+
       - uses: actions/checkout@v4
 
       - uses: pnpm/action-setup@v4
@@ -91,6 +103,12 @@ jobs:
           # Unset = the feature stays off (/mcp returns 404) and deploy proceeds.
           DESCOPE_MCP_ISSUER: ${{ vars.DESCOPE_MCP_ISSUER }}
           DESCOPE_JWKS_URL: ${{ vars.DESCOPE_JWKS_URL }}
+          # Dev only: "true" lets any Descope user in as the owner. Must stay
+          # unset in the production Environment (the deploy fails otherwise).
+          DESCOPE_MCP_ALLOW_ANY_USER: ${{ vars.DESCOPE_MCP_ALLOW_ANY_USER }}
+          # Same expression as the job's `environment:`. Written on every deploy
+          # so the Worker itself knows whether it runs as Dev or production.
+          DEPLOY_ENVIRONMENT: ${{ github.ref == 'refs/heads/main' && 'production' || 'development' }}
         run: |
           test -n "$D1_DATABASE_ID"
           cd apps/worker
@@ -99,6 +117,11 @@ jobs:
             -e "s|\"database_name\":\"[^\"]*\"|\"database_name\":\"${D1_DATABASE_NAME}\"|g" \
             -e "s|\"database_id\":\"[^\"]*\"|\"database_id\":\"${D1_DATABASE_ID}\"|g" \
             dist/line_harness/wrangler.json
+          # Always inject the environment name (unconditionally). Dev-only
+          # features such as DESCOPE_MCP_ALLOW_ANY_USER check it at runtime.
+          tmp="$(mktemp)"
+          jq --arg e "$DEPLOY_ENVIRONMENT" '.vars.DEPLOY_ENVIRONMENT = $e' \
+            dist/line_harness/wrangler.json > "$tmp" && mv "$tmp" dist/line_harness/wrangler.json
           # Swap the R2 bucket name only when R2_BUCKET_NAME is set (dev/prod split).
           if [ -n "$R2_BUCKET_NAME" ]; then
             sed -i \
@@ -126,6 +149,13 @@ jobs:
               .vars.DESCOPE_MCP_ISSUER = $i
               | .vars.DESCOPE_JWKS_URL = $j
             ' dist/line_harness/wrangler.json > "$tmp" && mv "$tmp" dist/line_harness/wrangler.json
+            # Dev only (blocked above for production). Only the exact value
+            # "true" is injected; anything else leaves the Worker default (off).
+            if [ "$DESCOPE_MCP_ALLOW_ANY_USER" = "true" ]; then
+              tmp="$(mktemp)"
+              jq '.vars.DESCOPE_MCP_ALLOW_ANY_USER = "true"' \
+                dist/line_harness/wrangler.json > "$tmp" && mv "$tmp" dist/line_harness/wrangler.json
+            fi
           fi
 
       - name: Deploy to Cloudflare Workers

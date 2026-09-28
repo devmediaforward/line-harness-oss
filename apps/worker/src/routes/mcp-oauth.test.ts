@@ -344,6 +344,119 @@ describe('POST /mcp with a Descope access token', () => {
     }
   });
 
+  describe('DESCOPE_MCP_ALLOW_ANY_USER (Dev only)', () => {
+    const ALLOW = { DESCOPE_MCP_ALLOW_ANY_USER: 'true', DEPLOY_ENVIRONMENT: 'development' };
+    const OWNER = { id: 'env-owner', name: 'Owner', role: 'owner' };
+
+    it('runs an unregistered email as the env API_KEY owner', async () => {
+      const { app, seen } = makeApp();
+      const { env, queries } = makeEnv([ALICE], ALLOW);
+      const token = await sign({ email: 'stranger@example.com' });
+
+      const listRes = await app.fetch(postMcp(TOOLS_LIST, token), env, execCtx);
+      expect(listRes.status).toBe(200);
+      const list = (await listRes.json()) as any;
+      expect((list.result.tools as Array<{ name: string }>).map((t) => t.name)).toContain('manage_tags');
+
+      const res = await app.fetch(postMcp(LIST_TAGS, token), env, execCtx);
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as any;
+      expect(body.result.isError).toBeFalsy();
+      expect(seen).toHaveLength(1);
+      expect(seen[0].auth).toBe(`Bearer ${ENV_OWNER_KEY}`);
+      expect(seen[0].staff).toEqual(OWNER);
+      expect(JSON.stringify(body)).not.toContain(ENV_OWNER_KEY);
+      // The staff lookup still runs once per outer request.
+      expect(queries.filter((q) => q.includes('LOWER(email) = ?'))).toHaveLength(2);
+    });
+
+    it('runs a token without an email claim as the owner, with no email lookup', async () => {
+      const { app, seen } = makeApp();
+      const { env, queries } = makeEnv([ALICE], ALLOW);
+      const res = await app.fetch(postMcp(LIST_TAGS, await sign({ email: undefined })), env, execCtx);
+      expect(res.status).toBe(200);
+      expect(seen).toHaveLength(1);
+      expect(seen[0].auth).toBe(`Bearer ${ENV_OWNER_KEY}`);
+      expect(seen[0].staff).toEqual(OWNER);
+      expect(queries.filter((q) => q.includes('LOWER(email) = ?'))).toHaveLength(0);
+    });
+
+    it('keeps a registered staff member on their own key and role', async () => {
+      const { app, seen } = makeApp();
+      const { env } = makeEnv([ALICE], ALLOW);
+      const res = await app.fetch(postMcp(LIST_TAGS, await sign()), env, execCtx);
+      expect(res.status).toBe(200);
+      expect(seen).toHaveLength(1);
+      expect(seen[0].auth).toBe(`Bearer ${ALICE.api_key}`);
+      expect(seen[0].staff).toEqual({ id: ALICE.id, name: ALICE.name, role: 'staff' });
+    });
+
+    const unmatched: Array<[string, StaffRow[], JWTPayload]> = [
+      ['two matching staff', [ALICE, { ...ALICE, id: 's-alice-2', api_key: 'staff-alice-key-2' }], {}],
+      ['an email explicitly marked unverified', [ALICE], { email_verified: false }],
+    ];
+
+    for (const [label, rows, claims] of unmatched) {
+      it(`runs ${label} as the owner, not as a staff member`, async () => {
+        const { app, seen } = makeApp();
+        const { env } = makeEnv(rows, ALLOW);
+        const res = await app.fetch(postMcp(LIST_TAGS, await sign(claims)), env, execCtx);
+        expect(res.status).toBe(200);
+        expect(seen).toHaveLength(1);
+        expect(seen[0].auth).toBe(`Bearer ${ENV_OWNER_KEY}`);
+        expect(seen[0].staff).toEqual(OWNER);
+      });
+    }
+
+    const forbidden: Array<[string, Partial<Env['Bindings']>]> = [
+      ['API_KEY is unset', { ...ALLOW, API_KEY: undefined as unknown as string }],
+      ['API_KEY is empty', { ...ALLOW, API_KEY: '' }],
+      ['the flag is "TRUE"', { ...ALLOW, DESCOPE_MCP_ALLOW_ANY_USER: 'TRUE' }],
+      ['the flag is "1"', { ...ALLOW, DESCOPE_MCP_ALLOW_ANY_USER: '1' }],
+      ['the flag is " true "', { ...ALLOW, DESCOPE_MCP_ALLOW_ANY_USER: ' true ' }],
+      ['DEPLOY_ENVIRONMENT is "production"', { ...ALLOW, DEPLOY_ENVIRONMENT: 'production' }],
+      ['DEPLOY_ENVIRONMENT is unset', { ...ALLOW, DEPLOY_ENVIRONMENT: undefined }],
+      ['DEPLOY_ENVIRONMENT is "Development"', { ...ALLOW, DEPLOY_ENVIRONMENT: 'Development' }],
+    ];
+
+    for (const [label, vars] of forbidden) {
+      it(`still 403s an unregistered email when ${label}`, async () => {
+        const { app, seen } = makeApp();
+        const { env } = makeEnv([ALICE], vars);
+        const res = await app.fetch(postMcp(LIST_TAGS, await sign({ email: 'stranger@example.com' })), env, execCtx);
+        expect(res.status).toBe(403);
+        expect(await res.json()).toEqual({ success: false, error: 'Forbidden' });
+        expect(seen).toHaveLength(0);
+      });
+    }
+
+    const invalid: Array<[string, () => Promise<string>]> = [
+      ['a signature from another key', () => sign({ email: 'stranger@example.com' }, { key: otherPrivateKey })],
+      ['a wrong audience', () => sign({ email: 'stranger@example.com' }, { aud: 'https://w.example.com/mcp/other' })],
+    ];
+
+    for (const [label, makeToken] of invalid) {
+      it(`still 401s ${label}`, async () => {
+        const { app, seen } = makeApp();
+        const { env, queries } = makeEnv([ALICE], ALLOW);
+        const res = await app.fetch(postMcp(LIST_TAGS, await makeToken()), env, execCtx);
+        expect(res.status).toBe(401);
+        expect(res.headers.get('WWW-Authenticate')).toBe(INVALID_CHALLENGE);
+        expect(queries).toHaveLength(0);
+        expect(seen).toHaveLength(0);
+      });
+    }
+
+    it('still 401s without a token', async () => {
+      const { app, seen } = makeApp();
+      const { env } = makeEnv([ALICE], ALLOW);
+      const res = await app.fetch(postMcp(LIST_TAGS), env, execCtx);
+      expect(res.status).toBe(401);
+      expect(res.headers.get('WWW-Authenticate')).toBe(CHALLENGE);
+      expect(seen).toHaveLength(0);
+    });
+  });
+
   it('405s on GET and DELETE', async () => {
     const { app } = makeApp();
     const { env } = makeEnv([ALICE]);
