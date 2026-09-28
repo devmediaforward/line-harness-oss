@@ -98,7 +98,9 @@ function bearerChallenge(c: Context<Env>, invalidToken: boolean): Response {
  * - `POST /mcp`: OAuth. Descope issues the access token, this Worker verifies
  *   it and maps its `email` claim to exactly one active staff member, whose
  *   own API key (and therefore role) the tools then run with. Disabled (404)
- *   unless DESCOPE_MCP_ISSUER and DESCOPE_JWKS_URL are both set.
+ *   unless DESCOPE_MCP_ISSUER and DESCOPE_JWKS_URL are both set. Dev only:
+ *   DESCOPE_MCP_ALLOW_ANY_USER="true" (with DEPLOY_ENVIRONMENT="development")
+ *   lets an unmatched user in as the owner.
  *
  * Isolate safety: a Cloudflare isolate is reused across requests from
  * different tenants, so every piece of per-tenant state is created inside the
@@ -163,19 +165,32 @@ export function createMcpRoute(appFetch: AppFetch, options: McpRouteOptions = {}
     if (!claims) return bearerChallenge(c, true);
 
     // The token proves who logged in to Descope; the staff table decides what
-    // they may do. Only an unambiguous match on an active staff member passes.
+    // they may do. Only an unambiguous match on an active staff member counts.
     const email = typeof claims.email === 'string' ? claims.email.trim().toLowerCase() : '';
-    if (!email) return c.json(FORBIDDEN, 403);
     // Descope may not put `email_verified` in MCP access tokens at all, so its
-    // absence is tolerated (sign-up is invite-only); an explicit `false` is not.
-    if (claims.email_verified === false) return c.json(FORBIDDEN, 403);
-    const matches = await getActiveStaffByEmail(c.env.DB, email);
-    if (matches.length !== 1) return c.json(FORBIDDEN, 403);
+    // absence is tolerated; an explicit `false` never matches a staff member.
+    // A blank email or an explicit `false` skips the D1 lookup entirely.
+    const matches =
+      email && claims.email_verified !== false ? await getActiveStaffByEmail(c.env.DB, email) : [];
 
     // Run the tools with that staff member's own key, so the API enforces
-    // their role. Never use env API_KEY here: it is the owner key and would
-    // escalate every Descope user to owner.
-    return serveMcp(c, matches[0].api_key, appFetch);
+    // their role.
+    if (matches.length === 1) return serveMcp(c, matches[0].api_key, appFetch);
+
+    // Otherwise the env API_KEY (the owner key) is used only when
+    // DESCOPE_MCP_ALLOW_ANY_USER is exactly "true", which escalates every
+    // verified Descope user to owner. Off by default, Dev only: the deploy
+    // workflow refuses to ship it to production, and the Worker itself also
+    // requires DEPLOY_ENVIRONMENT to be exactly "development", so a flag that
+    // reaches production some other way (e.g. a Cloudflare Secret) stays inert.
+    if (
+      c.env.DESCOPE_MCP_ALLOW_ANY_USER === 'true' &&
+      c.env.DEPLOY_ENVIRONMENT === 'development' &&
+      c.env.API_KEY
+    ) {
+      return serveMcp(c, c.env.API_KEY, appFetch);
+    }
+    return c.json(FORBIDDEN, 403);
   });
 
   return mcp;

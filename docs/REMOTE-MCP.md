@@ -9,7 +9,7 @@ Worker は MCP サーバーを内蔵しています。Claude の「カスタム�
 | API キー方式 | `https://<host>/mcp/<APIキー>` | URL に含めた API キー | 既存方式。移行期間中は残す |
 | Descope 方式 | `https://<host>/mcp` | Descope でブラウザログイン（OAuth） | 推奨 |
 
-どちらの方式でも、ツールは **その人の staff の権限（role）** で API を呼びます。
+どちらの方式でも、ツールは **その人の staff の権限（role）** で API を呼びます（例外: Dev で `DESCOPE_MCP_ALLOW_ANY_USER` を有効にしている場合、Descope 方式で staff と一致しなかった人は owner 権限になります。下記参照）。
 
 ---
 
@@ -29,7 +29,7 @@ Worker は MCP サーバーを内蔵しています。Claude の「カスタム�
 4. Worker がトークンを検証する（署名・issuer・audience・有効期限）
 5. トークンの `email` クレームと **有効な staff の email** を照合する（大文字小文字は区別しない）
    - ちょうど1人に一致 → その staff の権限でツールを実行
-   - 一致なし・2人以上一致・`email` クレームなし → `403 Forbidden`
+   - 一致なし・2人以上一致・`email` クレームなし → `403 Forbidden`（Dev で `DESCOPE_MCP_ALLOW_ANY_USER` を有効にしている場合だけ、owner 権限で実行。下記参照）
 
 メタデータは次の3か所で同じ内容を返します。
 
@@ -45,8 +45,20 @@ Worker は MCP サーバーを内蔵しています。Claude の「カスタム�
 | --- | --- |
 | `DESCOPE_MCP_ISSUER` | `https://api.descope.com/v1/apps/agentic/<ProjectID>/<MCPServerID>` |
 | `DESCOPE_JWKS_URL` | `https://api.descope.com/<ProjectID>/.well-known/jwks.json` |
+| `DESCOPE_MCP_ALLOW_ANY_USER` | 任意・**Dev 専用**。`true` のときだけ有効（下記参照）。本番では設定しない |
+| `DEPLOY_ENVIRONMENT` | 登録不要。ワークフローがデプロイのたびに `development` / `production` を自動で書き込みます |
 
 GitHub Actions でデプロイしている場合は、GitHub の Environment（`development` / `production`）の **Variables** に同じ名前で登録します。`.github/workflows/deploy-cloudflare-worker.yml` がデプロイ時に Worker の vars へ書き込みます。未登録の環境でもデプロイは成功し、機能が無効になるだけです。
+
+#### `DESCOPE_MCP_ALLOW_ANY_USER`（Dev 専用）
+
+値がちょうど `true` で（`TRUE` や `1` は無効扱い）、かつ `DEPLOY_ENVIRONMENT` がちょうど `development` のとき、トークンの検証に成功したのに staff とちょうど1人に一致しなかった人（`email` クレームなし・一致なし・2人以上一致・`email_verified` が `false` を含む）を、`403` ではなく **Worker の `API_KEY`（owner）の権限** で通します。staff と一致した人は、これまでどおりその staff の権限で動きます。トークンが無い・不正なときの `401` は変わりません。`API_KEY` が未設定なら `403` のままです。
+
+- **リスク**: Descope のセルフサインアップを許可していると、URL を知っていれば誰でも Descope に登録してログインでき、Dev の LINE アカウントから友だちへのメッセージ送信・一斉配信まで owner 権限で実行できます。テスト用の Dev 環境だけで使ってください。
+- **本番では使えません**: `production` 環境（`main` ブランチ）のデプロイでこの Variable が設定されていると、ワークフローはエラーで停止します（Repository の Variables に登録した場合も同じです）。さらに実行時にも Worker 自身が `DEPLOY_ENVIRONMENT` を確認し、`development` 以外（`production`・未設定・その他の値）では、Cloudflare の Secret などで誤って `true` が入っていても `403` を返します。
+- `DEPLOY_ENVIRONMENT` は `.github/workflows/deploy-cloudflare-worker.yml` がデプロイのたびに書き込みます（`main` なら `production`、それ以外は `development`）。有効になるのは `development` のときだけです。
+- `wrangler dev` などでローカルで試す場合は、`.dev.vars` に `DESCOPE_MCP_ALLOW_ANY_USER=true` と一緒に `DEPLOY_ENVIRONMENT=development` も書いてください（無いと `403` になります）。
+- 既定は無効です。Variable を削除して再デプロイすると無効に戻ります。
 
 ### Descope コンソールでの設定
 
@@ -56,7 +68,7 @@ GitHub Actions でデプロイしている場合は、GitHub の Environment（`
 2. **セルフサインアップをブロック**する（誰でもアカウントを作れる状態にしない）
 3. 使う人を **ユーザーとして招待** する
 4. Descope ユーザーの email を、LINE Harness の **staff の email と一致** させる（有効な staff で、同じ email の staff が複数いないこと）
-5. アクセストークンに `email` クレームが入っているか確認する。入っていない場合は、Consent Flow の **Custom Claims** で `email` を追加する（無いと必ず `403` になります）
+5. アクセストークンに `email` クレームが入っているか確認する。入っていない場合は、Consent Flow の **Custom Claims** で `email` を追加する（無いと `403` になります。Dev で `DESCOPE_MCP_ALLOW_ANY_USER` を有効にしている場合だけは owner 権限で通ります）
 
 ### Claude への接続手順
 
