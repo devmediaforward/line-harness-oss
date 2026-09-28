@@ -181,20 +181,57 @@ export function protectedResourceMetadata(requestUrl: string, config: DescopeMcp
   };
 }
 
+const DESCOPE_ID_SEGMENT = /^[A-Za-z0-9_-]+$/;
+
+/**
+ * The Descope project ID in a configured issuer: `/v1/apps/agentic/<projectId>/<serverId>`
+ * (MCP server issuer) or `/v1/apps/<projectId>` (project issuer). `null` for
+ * anything else, including an issuer with a query, fragment or trailing slash,
+ * so an unexpected value never widens what is accepted.
+ */
+function descopeProjectId(issuer: string): string | null {
+  let url: URL;
+  try {
+    url = new URL(issuer);
+  } catch {
+    return null;
+  }
+  // Rejects anything URL parsing would normalise or drop (query, fragment,
+  // userinfo, dot segments, ...): the value must already be in its plain form.
+  if (`${url.origin}${url.pathname}` !== issuer) return null;
+  const segments = url.pathname.split('/').slice(1);
+  if (segments[0] !== 'v1' || segments[1] !== 'apps') return null;
+  const ids =
+    segments[2] === 'agentic'
+      ? segments.length === 5 ? [segments[3], segments[4]] : null
+      : segments.length === 3 ? [segments[2]] : null;
+  if (!ids || !ids.every((id) => DESCOPE_ID_SEGMENT.test(id))) return null;
+  return ids[0];
+}
+
 /**
  * Verify a Descope access token for this resource. Returns the claims, or
  * `null` for any failure (bad signature, wrong issuer/audience, expired,
  * disallowed algorithm, missing `sub`, unreachable JWKS, ...). The reason is
  * deliberately not surfaced so it cannot leak to the caller.
+ *
+ * Descope access tokens carry the project ID as `aud`, and a project mints
+ * them under either the MCP server issuer or the project issuer (all signed
+ * with the same project keys). So when the project ID can be read from the
+ * configured issuer, `aud` may be the resource or the project ID, and `iss`
+ * may be the configured issuer or that project's issuer, each matched
+ * exactly. Otherwise only the configured issuer and the resource are accepted.
  */
 export async function verifyDescopeAccessToken(
   token: string,
   options: { config: DescopeMcpConfig; audience: string; resolveJwks: JwksResolver },
 ): Promise<JWTPayload | null> {
   try {
+    const { issuer } = options.config;
+    const projectId = descopeProjectId(issuer);
     const { payload } = await jwtVerify(token, options.resolveJwks(options.config.jwksUrl), {
-      issuer: options.config.issuer,
-      audience: options.audience,
+      issuer: projectId ? [issuer, `${new URL(issuer).origin}/v1/apps/${projectId}`] : issuer,
+      audience: projectId ? [options.audience, projectId] : options.audience,
       algorithms: ACCEPTED_ALGORITHMS,
       clockTolerance: 5,
       // jwtVerify checks `exp` only when present; a token must carry one.
