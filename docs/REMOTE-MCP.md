@@ -27,6 +27,11 @@ Worker は MCP サーバーを内蔵しています。Claude の「カスタム�
 2. Claude がそのメタデータ（RFC 9728）を読み、Descope のログイン画面を開く
 3. ログイン後、Descope が発行したアクセストークン（JWT）で `/mcp` を呼ぶ
 4. Worker がトークンを検証する（署名・issuer・audience・有効期限）
+   - 受け付ける `iss`: `DESCOPE_MCP_ISSUER` そのもの、またはそのプロジェクトの issuer（`DESCOPE_MCP_ISSUER` と同じドメインの `/v1/apps/<ProjectID>`。例: `https://api.descope.com/v1/apps/<ProjectID>`）のどちらか。どちらも一字一句一致したときだけ通します（この2つと表記が違う `iss`、たとえば別の MCP Server ID・テナント形式・別ドメイン・末尾スラッシュ付きは不可）
+   - 受け付ける `aud`: `https://<host>/mcp`、または Descope の **ProjectID** のどちらかを含むこと
+   - 理由: Descope のアクセストークンは `aud` に ProjectID が入り、`iss` も MCP Server の issuer とプロジェクトの issuer のどちらで発行されるかが発行経路によって変わります（どちらも同じプロジェクトの鍵で署名されます）。`https://<host>/mcp` だけを `aud` として求めていた頃は、Descope でのログインと同意が成功しても接続できませんでした（Descope 公式の接続例 FastMCP `DescopeProvider` も `aud` = ProjectID で検証しています）
+   - ProjectID は `DESCOPE_MCP_ISSUER` から読み取ります（`/v1/apps/agentic/<ProjectID>/<MCPServerID>` か `/v1/apps/<ProjectID>` の形のときだけ）。読み取れない形なら、これまでどおり `DESCOPE_MCP_ISSUER` ちょうどの `iss` と `https://<host>/mcp` の `aud` だけを受け付けます
+   - **注意（トレードオフ）**: 同じ Descope プロジェクトの鍵で署名され `aud` が ProjectID のトークンなら、この MCP Server 以外の用途（そのプロジェクトの別アプリなど）で発行されたものでも通ります。**この MCP Server 専用の Descope プロジェクトを使ってください**（他のアプリと同じプロジェクトを共用しない）
 5. トークンの `email` クレームと **有効な staff の email** を照合する（大文字小文字は区別しない）
    - ちょうど1人に一致 → その staff の権限でツールを実行
    - 一致なし・2人以上一致・`email` クレームなし → `403 Forbidden`（Dev で `DESCOPE_MCP_ALLOW_ANY_USER` を有効にしている場合だけ、owner 権限で実行。下記参照）
@@ -64,7 +69,7 @@ GitHub Actions でデプロイしている場合は、GitHub の Environment（`
 
 1. MCP Server を作成し、**MCP Server URL** に `https://<host>/mcp` を設定する
    - パスは必ず `/mcp` ちょうどにする（Claude 側に「`/mcp` 以外のパスだとログイン後に繋がらない」既知の不具合があります: anthropics/claude-ai-mcp#878）
-   - この値がアクセストークンの `aud` になり、Worker は `https://<host>/mcp` と一致するかを検証します
+   - Worker はアクセストークンの `aud` に `https://<host>/mcp` か ProjectID のどちらかが入っているかを検証します（上の「仕組み」の 4. 参照）
 2. **セルフサインアップをブロック**する（誰でもアカウントを作れる状態にしない）
 3. 使う人を **ユーザーとして招待** する
 4. Descope ユーザーの email を、LINE Harness の **staff の email と一致** させる（有効な staff で、同じ email の staff が複数いないこと）
@@ -82,5 +87,5 @@ GitHub Actions でデプロイしている場合は、GitHub の Environment（`
 | 症状 | 確認すること |
 | --- | --- |
 | `/mcp` が `404` | `DESCOPE_MCP_ISSUER` と `DESCOPE_JWKS_URL` が両方デプロイされているか |
-| ログイン後も `401` | MCP Server URL が `https://<host>/mcp` ちょうどか / issuer の値がコンソールの値と一字一句同じか |
+| ログイン後も `401` | MCP Server URL が `https://<host>/mcp` ちょうどか / issuer の値がコンソールの値と一字一句同じか（`/v1/apps/agentic/<ProjectID>/<MCPServerID>` の形で、末尾スラッシュなし） |
 | `403` | トークンに `email` があるか / その email の有効な staff がちょうど1人か |

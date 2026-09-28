@@ -17,6 +17,8 @@ const ORIGIN = 'https://w.example.com';
 const RESOURCE = `${ORIGIN}/mcp`;
 const METADATA_URL = `${ORIGIN}/.well-known/oauth-protected-resource/mcp`;
 const ISSUER = 'https://api.descope.com/v1/apps/agentic/P1/M1';
+const PROJECT_ID = 'P1';
+const PROJECT_ISSUER = 'https://api.descope.com/v1/apps/P1';
 const JWKS_URL = 'https://api.descope.com/P1/.well-known/jwks.json';
 const ENV_OWNER_KEY = 'env-owner-key';
 
@@ -221,6 +223,138 @@ describe('POST /mcp with a Descope access token', () => {
     const token = await sign({}, { aud: ['https://other.example.com', RESOURCE] });
     const res = await app.fetch(postMcp(TOOLS_LIST, token), env, execCtx);
     expect(res.status).toBe(200);
+  });
+
+  describe('Descope project claims (project ID P1 from the configured issuer)', () => {
+    const accepted: Array<[string, SignOptions]> = [
+      ['the MCP server issuer with the project ID as audience', { aud: PROJECT_ID }],
+      ['the project issuer with the project ID as audience', { iss: PROJECT_ISSUER, aud: PROJECT_ID }],
+      ['the project issuer with the resource as audience', { iss: PROJECT_ISSUER }],
+      ['an audience array that contains the project ID', { aud: [PROJECT_ID, 'https://other.example.com'] }],
+    ];
+
+    for (const [label, o] of accepted) {
+      it(`accepts ${label}`, async () => {
+        const { app, seen } = makeApp();
+        const { env } = makeEnv([ALICE]);
+        const res = await app.fetch(postMcp(LIST_TAGS, await sign({}, o)), env, execCtx);
+        expect(res.status).toBe(200);
+        expect(seen).toHaveLength(1);
+        expect(seen[0].auth).toBe(`Bearer ${ALICE.api_key}`);
+      });
+    }
+
+    const rejected: Array<[string, () => Promise<string>]> = [
+      ['another project ID as audience', () => sign({}, { aud: 'P2' })],
+      ['an unrelated URL as audience', () => sign({}, { aud: 'https://unrelated.example.com/' })],
+      [
+        'no aud claim',
+        () => {
+          const payload = validPayload();
+          delete payload.aud;
+          return new SignJWT(payload).setProtectedHeader({ alg: 'ES384', kid: 'k1' }).sign(privateKey);
+        },
+      ],
+      ['the project ID with a different case', () => sign({}, { aud: 'p1' })],
+      ['an agentic issuer with another server ID', () => sign({}, { iss: 'https://api.descope.com/v1/apps/agentic/P1/M2', aud: PROJECT_ID })],
+      ['the project issuer of another project', () => sign({}, { iss: 'https://api.descope.com/v1/apps/P2', aud: PROJECT_ID })],
+      ['the project issuer with a trailing slash', () => sign({}, { iss: `${PROJECT_ISSUER}/`, aud: PROJECT_ID })],
+      ['the MCP server issuer with a trailing slash', () => sign({}, { iss: `${ISSUER}/`, aud: PROJECT_ID })],
+      ['the project issuer on another origin', () => sign({}, { iss: 'https://evil.example.com/v1/apps/P1', aud: PROJECT_ID })],
+      ['the MCP server issuer on another origin', () => sign({}, { iss: 'https://evil.example.com/v1/apps/agentic/P1/M1', aud: PROJECT_ID })],
+      ['a tenant issuer', () => sign({}, { iss: `${PROJECT_ISSUER}/T1`, aud: PROJECT_ID })],
+      ['the bare project path as issuer', () => sign({}, { iss: 'https://api.descope.com/P1', aud: PROJECT_ID })],
+      ['the project ID with a signature from another key', () => sign({}, { aud: PROJECT_ID, key: otherPrivateKey })],
+    ];
+
+    for (const [label, makeToken] of rejected) {
+      it(`401s ${label}`, async () => {
+        const { app, seen } = makeApp();
+        const { env, queries } = makeEnv([ALICE]);
+        const res = await app.fetch(postMcp(LIST_TAGS, await makeToken()), env, execCtx);
+        expect(res.status).toBe(401);
+        expect(res.headers.get('WWW-Authenticate')).toBe(INVALID_CHALLENGE);
+        expect(await res.json()).toEqual({ success: false, error: 'Unauthorized' });
+        expect(queries).toHaveLength(0);
+        expect(seen).toHaveLength(0);
+      });
+    }
+
+    // Issuers the project ID cannot be read from: only the exact issuer and
+    // the resource audience are accepted, as before.
+    const underivable = [
+      'https://auth.example.com/oauth2',
+      'https://api.descope.com/v1/apps/agentic/P1',
+      'https://api.descope.com/v1/apps/P1/T1',
+      'https://api.descope.com/v1/apps/agentic/P1/M1/',
+      'https://api.descope.com/v1/apps/agentic/P1/M1?x=1',
+      'https://api.descope.com/v1/apps/agentic/P1/M1#f',
+      'https://API.descope.com/v1/apps/agentic/P1/M1',
+      'https://u@api.descope.com/v1/apps/agentic/P1/M1',
+      'https://api.descope.com/v1/apps/agentic/x/../P1/M1',
+      'https://api.descope.com/v1/apps/agentic/P%31/M1',
+      'https://api.descope.com:443/v1/apps/agentic/P1/M1',
+    ];
+
+    // Configured issuers the project ID is read from, beyond the default one.
+    const derivable: Array<[string, string]> = [
+      ['https://api.descope.com/v1/apps/P1', 'https://api.descope.com/v1/apps/P1'],
+      ['https://api.descope.com:8443/v1/apps/agentic/P1/M1', 'https://api.descope.com:8443/v1/apps/P1'],
+      ['https://[::1]/v1/apps/agentic/P1/M1', 'https://[::1]/v1/apps/P1'],
+    ];
+
+    for (const [issuer, projectIssuer] of derivable) {
+      describe(`with DESCOPE_MCP_ISSUER=${issuer}`, () => {
+        it('accepts the configured issuer and its project issuer with the project ID as audience', async () => {
+          const { app } = makeApp();
+          const { env } = makeEnv([ALICE], { DESCOPE_MCP_ISSUER: issuer });
+          for (const iss of [issuer, projectIssuer]) {
+            const res = await app.fetch(postMcp(LIST_TAGS, await sign({}, { iss, aud: PROJECT_ID })), env, execCtx);
+            expect(res.status).toBe(200);
+          }
+        });
+
+        it('401s the default MCP server issuer', async () => {
+          const { app, seen } = makeApp();
+          const { env, queries } = makeEnv([ALICE], { DESCOPE_MCP_ISSUER: issuer });
+          const res = await app.fetch(postMcp(LIST_TAGS, await sign({}, { aud: PROJECT_ID })), env, execCtx);
+          expect(res.status).toBe(401);
+          expect(queries).toHaveLength(0);
+          expect(seen).toHaveLength(0);
+        });
+      });
+    }
+
+    for (const issuer of underivable) {
+      describe(`with DESCOPE_MCP_ISSUER=${issuer}`, () => {
+        it('still accepts the resource audience', async () => {
+          const { app } = makeApp();
+          const { env } = makeEnv([ALICE], { DESCOPE_MCP_ISSUER: issuer });
+          const res = await app.fetch(postMcp(LIST_TAGS, await sign({}, { iss: issuer })), env, execCtx);
+          expect(res.status).toBe(200);
+        });
+
+        it('401s the project ID as audience', async () => {
+          const { app, seen } = makeApp();
+          const { env, queries } = makeEnv([ALICE], { DESCOPE_MCP_ISSUER: issuer });
+          for (const aud of [PROJECT_ID, 'M1', 'T1']) {
+            const res = await app.fetch(postMcp(LIST_TAGS, await sign({}, { iss: issuer, aud })), env, execCtx);
+            expect(res.status).toBe(401);
+            expect(res.headers.get('WWW-Authenticate')).toBe(INVALID_CHALLENGE);
+          }
+          expect(queries).toHaveLength(0);
+          expect(seen).toHaveLength(0);
+        });
+
+        it('401s the project issuer', async () => {
+          const { app } = makeApp();
+          const { env, queries } = makeEnv([ALICE], { DESCOPE_MCP_ISSUER: issuer });
+          const res = await app.fetch(postMcp(LIST_TAGS, await sign({}, { iss: PROJECT_ISSUER })), env, execCtx);
+          expect(res.status).toBe(401);
+          expect(queries).toHaveLength(0);
+        });
+      });
+    }
   });
 
   it('accepts email_verified: true', async () => {
