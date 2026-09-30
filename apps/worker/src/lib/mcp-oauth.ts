@@ -2,8 +2,6 @@ import {
   createLocalJWKSet,
   createRemoteJWKSet,
   customFetch,
-  decodeJwt,
-  decodeProtectedHeader,
   errors,
   jwtVerify,
   type FetchImplementation,
@@ -241,76 +239,23 @@ function descopeProjectId(issuer: string): string | null {
  */
 export async function verifyDescopeAccessToken(
   token: string,
-  options: {
-    config: DescopeMcpConfig;
-    audience: string;
-    resolveJwks: JwksResolver;
-    // TEMP(2026-09-30): Dev-only diagnosis of rejected claude.ai tokens. Remove after.
-    diagnose?: boolean;
-  },
+  options: { config: DescopeMcpConfig; audience: string; resolveJwks: JwksResolver },
 ): Promise<JWTPayload | null> {
-  const { issuer } = options.config;
-  const projectId = descopeProjectId(issuer);
-  const issuers = projectId ? [issuer, `${new URL(issuer).origin}/v1/apps/${projectId}`] : [issuer];
-  const audiences = projectId ? [options.audience, projectId] : [options.audience];
   try {
+    const { issuer } = options.config;
+    const projectId = descopeProjectId(issuer);
     const { payload } = await jwtVerify(token, options.resolveJwks(options.config.jwksUrl), {
-      issuer: issuers,
-      audience: audiences,
+      issuer: projectId ? [issuer, `${new URL(issuer).origin}/v1/apps/${projectId}`] : issuer,
+      audience: projectId ? [options.audience, projectId] : options.audience,
       algorithms: ACCEPTED_ALGORITHMS,
       clockTolerance: 5,
       // jwtVerify checks `exp` only when present; a token must carry one.
       requiredClaims: ['exp'],
     });
     // Covers both a missing and a non-string `sub`.
-    if (typeof payload.sub !== 'string') {
-      if (options.diagnose) logRejectedToken(token, 'sub is not a string', issuers, audiences);
-      return null;
-    }
+    if (typeof payload.sub !== 'string') return null;
     return payload;
-  } catch (error) {
-    if (options.diagnose) logRejectedToken(token, error, issuers, audiences);
+  } catch {
     return null;
   }
-}
-
-// TEMP(2026-09-30): Dev-only diagnosis of rejected claude.ai tokens. Remove after.
-// Prints only public facts (which check failed, header, iss/aud/azp/scope,
-// claim names). Never the token, `sub` or `email` values.
-function logRejectedToken(token: string, reason: unknown, issuers: string[], audiences: string[]) {
-  let header: unknown = null;
-  let claims: Record<string, unknown> | null = null;
-  try {
-    header = decodeProtectedHeader(token);
-  } catch {
-    header = 'undecodable';
-  }
-  try {
-    const p = decodeJwt(token);
-    claims = {
-      iss: p.iss,
-      aud: p.aud,
-      azp: p.azp,
-      scope: p.scope,
-      exp: p.exp,
-      iat: p.iat,
-      subIsString: typeof p.sub === 'string',
-      claimNames: Object.keys(p),
-    };
-  } catch {
-    claims = null;
-  }
-  const r =
-    reason instanceof Error
-      ? {
-          name: reason.name,
-          code: (reason as { code?: unknown }).code,
-          claim: (reason as { claim?: unknown }).claim,
-          message: reason.message,
-        }
-      : String(reason);
-  console.log(
-    '[mcp-auth-diag]',
-    JSON.stringify({ reason: r, header, claims, expected: { issuers, audiences }, segments: token.split('.').length }),
-  );
 }
