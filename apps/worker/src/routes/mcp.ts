@@ -159,23 +159,14 @@ export function createMcpRoute(appFetch: AppFetch, options: McpRouteOptions = {}
 
     const authHeader = c.req.header('Authorization');
     const token = authHeader?.startsWith('Bearer ') ? authHeader.slice('Bearer '.length) : '';
-    // TEMP(2026-09-30): Dev-only diagnosis of rejected claude.ai tokens. Remove after.
-    const diagnose = c.env.DEPLOY_ENVIRONMENT === 'development';
-    if (!token) {
-      if (diagnose && authHeader) {
-        console.log('[mcp-auth-diag] no Bearer token; scheme=' + JSON.stringify(authHeader.split(' ')[0]));
-      }
-      return bearerChallenge(c, false);
-    }
+    if (!token) return bearerChallenge(c, false);
 
     const claims = await verifyDescopeAccessToken(token, {
       config,
       audience: protectedResourceUrl(c.req.url),
       resolveJwks,
-      diagnose,
     });
     if (!claims) return bearerChallenge(c, true);
-    if (diagnose) console.log('[mcp-auth-diag] token verified');
 
     // The token proves who logged in to Descope; the staff table decides what
     // they may do. Only an unambiguous match on an active staff member counts.
