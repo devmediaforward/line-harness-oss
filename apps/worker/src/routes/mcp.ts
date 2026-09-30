@@ -102,9 +102,9 @@ function bearerChallenge(c: Context<Env>, invalidToken: boolean): Response {
  * - `POST /mcp`: OAuth. Descope issues the access token, this Worker verifies
  *   it and maps its `email` claim to exactly one active staff member, whose
  *   own API key (and therefore role) the tools then run with. Disabled (404)
- *   unless DESCOPE_MCP_ISSUER and DESCOPE_JWKS_URL are both set. Dev only:
- *   DESCOPE_MCP_ALLOW_ANY_USER="true" (with DEPLOY_ENVIRONMENT="development")
- *   lets an unmatched user in as the owner.
+ *   unless DESCOPE_MCP_ISSUER and DESCOPE_JWKS_URL are both set. Off by
+ *   default: DESCOPE_MCP_ALLOW_ANY_USER="true" lets an unmatched user in as
+ *   the owner, in whichever environment (Dev or production) it is set.
  *
  * Isolate safety: a Cloudflare isolate is reused across requests from
  * different tenants, so every piece of per-tenant state is created inside the
@@ -183,15 +183,10 @@ export function createMcpRoute(appFetch: AppFetch, options: McpRouteOptions = {}
 
     // Otherwise the env API_KEY (the owner key) is used only when
     // DESCOPE_MCP_ALLOW_ANY_USER is exactly "true", which escalates every
-    // verified Descope user to owner. Off by default, Dev only: the deploy
-    // workflow refuses to ship it to production, and the Worker itself also
-    // requires DEPLOY_ENVIRONMENT to be exactly "development", so a flag that
-    // reaches production some other way (e.g. a Cloudflare Secret) stays inert.
-    if (
-      c.env.DESCOPE_MCP_ALLOW_ANY_USER === 'true' &&
-      c.env.DEPLOY_ENVIRONMENT === 'development' &&
-      c.env.API_KEY
-    ) {
+    // verified Descope user to owner. Off by default. When it is on, every
+    // verified Descope user runs as the owner in whichever environment
+    // (Dev or production) the flag is set.
+    if (c.env.DESCOPE_MCP_ALLOW_ANY_USER === 'true' && c.env.API_KEY) {
       return serveMcp(c, c.env.API_KEY, appFetch);
     }
     return c.json(FORBIDDEN, 403);
