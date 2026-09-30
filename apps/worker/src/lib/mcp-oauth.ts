@@ -172,9 +172,12 @@ const ACCEPTED_ALGORITHMS = [
  * for the scopes in Descope's authorization server metadata: Descope rejects
  * `profile` / `email` / `phone` with `invalid_scope`, because an MCP Server
  * with no scopes of its own accepts only `openid` and `offline_access`.
- * Claude adds `offline_access` itself.
+ * `openid` is not requested: it makes Descope return an ID token as well, and
+ * with it claude.ai failed right after login without ever calling `/mcp`
+ * (consistent with its ID token issuer check). `offline_access` alone gets
+ * the access token plus a refresh token.
  */
-export const MCP_OAUTH_SCOPES = ['openid'] as const;
+export const MCP_OAUTH_SCOPES = ['offline_access'] as const;
 
 export function protectedResourceUrl(requestUrl: string): string {
   return `${new URL(requestUrl).origin}/mcp`;
