@@ -163,6 +163,17 @@ const ACCEPTED_ALGORITHMS = [
   'EdDSA',
 ];
 
+/**
+ * Scopes an MCP client should request for `/mcp`. Claude takes these from the
+ * 401 challenge (then from `scopes_supported` below). Without them, claude.ai
+ * was bounced back before Descope's login screen, consistent with it asking
+ * for the scopes in Descope's authorization server metadata: Descope rejects
+ * `profile` / `email` / `phone` with `invalid_scope`, because an MCP Server
+ * with no scopes of its own accepts only `openid` and `offline_access`.
+ * Claude adds `offline_access` itself.
+ */
+export const MCP_OAUTH_SCOPES = ['openid'] as const;
+
 export function protectedResourceUrl(requestUrl: string): string {
   return `${new URL(requestUrl).origin}/mcp`;
 }
@@ -176,6 +187,7 @@ export function protectedResourceMetadata(requestUrl: string, config: DescopeMcp
   return {
     resource: protectedResourceUrl(requestUrl),
     authorization_servers: [config.issuer],
+    scopes_supported: [...MCP_OAUTH_SCOPES],
     bearer_methods_supported: ['header'],
     resource_name: 'LINE Harness',
   };
