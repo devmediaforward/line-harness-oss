@@ -23,8 +23,9 @@ Worker は MCP サーバーを内蔵しています。Claude の「カスタム�
 
 ### 仕組み
 
-1. Claude が `/mcp` にアクセス → Worker が `401` と `WWW-Authenticate: Bearer resource_metadata="https://<host>/.well-known/oauth-protected-resource/mcp"` を返す
+1. Claude が `/mcp` にアクセス → Worker が `401` と `WWW-Authenticate: Bearer resource_metadata="https://<host>/.well-known/oauth-protected-resource/mcp", scope="openid"` を返す
 2. Claude がそのメタデータ（RFC 9728）を読み、Descope のログイン画面を開く
+   - 要求するスコープは Worker が `scope="openid"`（メタデータの `scopes_supported` も同じ）で指定します。指定していなかった頃は、claude.ai が Descope のログイン画面に届く前に「認証に失敗しました」で戻されていました。Descope のメタデータにあるスコープ（`profile` / `email` / `phone` など）を要求していたと見られ、Descope はこれらを `invalid_scope` で拒否します（MCP Server に独自スコープが無い Descope が受け付けるのは `openid` と `offline_access` だけ。`offline_access` は Claude が自分で足します）
 3. ログイン後、Descope が発行したアクセストークン（JWT）で `/mcp` を呼ぶ
 4. Worker がトークンを検証する（署名・issuer・audience・有効期限）
    - 受け付ける `iss`: `DESCOPE_MCP_ISSUER` そのもの、またはそのプロジェクトの issuer（`DESCOPE_MCP_ISSUER` と同じドメインの `/v1/apps/<ProjectID>`。例: `https://api.descope.com/v1/apps/<ProjectID>`）のどちらか。どちらも一字一句一致したときだけ通します（この2つと表記が違う `iss`、たとえば別の MCP Server ID・テナント形式・別ドメイン・末尾スラッシュ付きは不可）
@@ -87,5 +88,6 @@ GitHub Actions でデプロイしている場合は、GitHub の Environment（`
 | 症状 | 確認すること |
 | --- | --- |
 | `/mcp` が `404` | `DESCOPE_MCP_ISSUER` と `DESCOPE_JWKS_URL` が両方デプロイされているか |
+| 「連携」を押すとログイン画面が出ずにすぐ「認証に失敗しました」 | `401` の `WWW-Authenticate` に `scope="openid"` があるか。Descope の MCP Server にフロー `inbound-apps-user-consent` があるか |
 | ログイン後も `401` | MCP Server URL が `https://<host>/mcp` ちょうどか / issuer の値がコンソールの値と一字一句同じか（`/v1/apps/agentic/<ProjectID>/<MCPServerID>` の形で、末尾スラッシュなし） |
 | `403` | トークンに `email` があるか / その email の有効な staff がちょうど1人か |

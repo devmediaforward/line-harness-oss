@@ -10,6 +10,7 @@ import { getClientIp } from '../middleware/rate-limit.js';
 import {
   getDescopeMcpConfig,
   getRemoteJwks,
+  MCP_OAUTH_SCOPES,
   protectedResourceMetadata,
   protectedResourceMetadataUrl,
   protectedResourceUrl,
@@ -80,10 +81,13 @@ async function serveMcp(c: Context<Env>, apiKey: string, appFetch: AppFetch): Pr
 
 /**
  * RFC 6750 challenge pointing the client at the protected resource metadata,
- * which is how an MCP client discovers where to log in.
+ * which is how an MCP client discovers where to log in, and naming the scopes
+ * to request (see MCP_OAUTH_SCOPES).
  */
 function bearerChallenge(c: Context<Env>, invalidToken: boolean): Response {
-  let challenge = `Bearer resource_metadata="${protectedResourceMetadataUrl(c.req.url)}"`;
+  let challenge =
+    `Bearer resource_metadata="${protectedResourceMetadataUrl(c.req.url)}"` +
+    `, scope="${MCP_OAUTH_SCOPES.join(' ')}"`;
   if (invalidToken) challenge += ', error="invalid_token"';
   return c.json(UNAUTHORIZED, 401, { 'WWW-Authenticate': challenge });
 }
