@@ -22,7 +22,7 @@ const PROJECT_ISSUER = 'https://api.descope.com/v1/apps/P1';
 const JWKS_URL = 'https://api.descope.com/P1/.well-known/jwks.json';
 const ENV_OWNER_KEY = 'env-owner-key';
 
-const CHALLENGE = `Bearer resource_metadata="${METADATA_URL}", scope="openid"`;
+const CHALLENGE = `Bearer resource_metadata="${METADATA_URL}", scope="offline_access"`;
 const INVALID_CHALLENGE = `${CHALLENGE}, error="invalid_token"`;
 
 type StaffRow = {
@@ -644,7 +644,7 @@ describe('protected resource metadata', () => {
       expect(await res.json()).toEqual({
         resource: 'https://other.example.org/mcp',
         authorization_servers: [ISSUER],
-        scopes_supported: ['openid'],
+        scopes_supported: ['offline_access'],
         bearer_methods_supported: ['header'],
         resource_name: 'LINE Harness',
       });
