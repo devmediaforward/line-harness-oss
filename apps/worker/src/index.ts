@@ -132,12 +132,12 @@ export type Env = {
     // metadata paths return 404.
     DESCOPE_MCP_ISSUER?: string; // https://api.descope.com/v1/apps/agentic/<ProjectID>/<MCPServerID>
     DESCOPE_JWKS_URL?: string;   // https://api.descope.com/<ProjectID>/.well-known/jwks.json
-    // Dev only. Enabled only when exactly "true" and DEPLOY_ENVIRONMENT is
-    // exactly "development": a verified Descope token that matches no single
-    // active staff runs the tools as the env API_KEY owner. The deploy
-    // workflow refuses to ship it to production.
+    // Off by default. Enabled only when exactly "true", in any environment
+    // (Dev or production): a verified Descope token that matches no single
+    // active staff runs the tools as the env API_KEY owner.
     DESCOPE_MCP_ALLOW_ANY_USER?: string;
     // The deploy workflow writes 'development' or 'production' on every deploy.
+    // Not used by DESCOPE_MCP_ALLOW_ANY_USER.
     DEPLOY_ENVIRONMENT?: string;
   };
   Variables: {

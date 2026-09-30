@@ -478,7 +478,7 @@ describe('POST /mcp with a Descope access token', () => {
     }
   });
 
-  describe('DESCOPE_MCP_ALLOW_ANY_USER (Dev only)', () => {
+  describe('DESCOPE_MCP_ALLOW_ANY_USER', () => {
     const ALLOW = { DESCOPE_MCP_ALLOW_ANY_USER: 'true', DEPLOY_ENVIRONMENT: 'development' };
     const OWNER = { id: 'env-owner', name: 'Owner', role: 'owner' };
 
@@ -542,15 +542,33 @@ describe('POST /mcp with a Descope access token', () => {
       });
     }
 
+    const anyEnvironment: Array<[string, Partial<Env['Bindings']>]> = [
+      ['DEPLOY_ENVIRONMENT is "production"', { ...ALLOW, DEPLOY_ENVIRONMENT: 'production' }],
+      ['DEPLOY_ENVIRONMENT is unset', { ...ALLOW, DEPLOY_ENVIRONMENT: undefined }],
+      ['DEPLOY_ENVIRONMENT is "Development"', { ...ALLOW, DEPLOY_ENVIRONMENT: 'Development' }],
+    ];
+
+    for (const [label, vars] of anyEnvironment) {
+      it(`runs an unregistered email as the owner when ${label}`, async () => {
+        const { app, seen } = makeApp();
+        const { env } = makeEnv([ALICE], vars);
+        const res = await app.fetch(postMcp(LIST_TAGS, await sign({ email: 'stranger@example.com' })), env, execCtx);
+        expect(res.status).toBe(200);
+        const body = (await res.json()) as any;
+        expect(body.result.isError).toBeFalsy();
+        expect(seen).toHaveLength(1);
+        expect(seen[0].auth).toBe(`Bearer ${ENV_OWNER_KEY}`);
+        expect(seen[0].staff).toEqual(OWNER);
+        expect(JSON.stringify(body)).not.toContain(ENV_OWNER_KEY);
+      });
+    }
+
     const forbidden: Array<[string, Partial<Env['Bindings']>]> = [
       ['API_KEY is unset', { ...ALLOW, API_KEY: undefined as unknown as string }],
       ['API_KEY is empty', { ...ALLOW, API_KEY: '' }],
       ['the flag is "TRUE"', { ...ALLOW, DESCOPE_MCP_ALLOW_ANY_USER: 'TRUE' }],
       ['the flag is "1"', { ...ALLOW, DESCOPE_MCP_ALLOW_ANY_USER: '1' }],
       ['the flag is " true "', { ...ALLOW, DESCOPE_MCP_ALLOW_ANY_USER: ' true ' }],
-      ['DEPLOY_ENVIRONMENT is "production"', { ...ALLOW, DEPLOY_ENVIRONMENT: 'production' }],
-      ['DEPLOY_ENVIRONMENT is unset', { ...ALLOW, DEPLOY_ENVIRONMENT: undefined }],
-      ['DEPLOY_ENVIRONMENT is "Development"', { ...ALLOW, DEPLOY_ENVIRONMENT: 'Development' }],
     ];
 
     for (const [label, vars] of forbidden) {
