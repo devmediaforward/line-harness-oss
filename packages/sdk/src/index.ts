@@ -15,6 +15,7 @@ export { StaffResource } from './resources/staff.js'
 export { ImagesResource } from './resources/images.js'
 export { AutoRepliesResource } from './resources/auto-replies.js'
 export { ConversationsResource } from './resources/conversations.js'
+export { EntryRoutesResource } from './resources/entry-routes.js'
 
 // All types
 export type {
@@ -75,6 +76,13 @@ export type {
   ConversationMessage,
   ConversationDetail,
   GetConversationParams,
+  EntryRoute,
+  EntryRouteFunnel,
+  InflowParams,
+  InflowRouteSummary,
+  InflowSummary,
+  InflowRefFriend,
+  InflowRefDetail,
 } from './types.js'
 
 export type {

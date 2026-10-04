@@ -631,3 +631,57 @@ export interface GetConversationParams {
   limit?: number
   before?: string
 }
+
+// ─── Entry Routes / Inflow Analytics ─────────────────────
+export interface EntryRoute {
+  id: string
+  refCode: string
+  name: string
+  tagId: string | null
+  scenarioId: string | null
+  redirectUrl: string | null
+  poolId: string | null
+  introTemplateId: string | null
+  runAccountFriendAddScenarios: boolean
+  isActive: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface EntryRouteFunnel {
+  click_count: number
+  friend_add_count: number
+  form_submission_count: number
+  cv_count: number
+}
+
+export interface InflowParams {
+  lineAccountId?: string
+}
+
+export interface InflowRouteSummary {
+  refCode: string
+  name: string | null
+  friendCount: number
+  clickCount: number
+  latestAt: string | null
+}
+
+export interface InflowSummary {
+  routes: InflowRouteSummary[]
+  totalFriends: number
+  friendsWithRef: number
+  friendsWithoutRef: number
+}
+
+export interface InflowRefFriend {
+  id: string
+  displayName: string | null
+  trackedAt: string | null
+}
+
+export interface InflowRefDetail {
+  refCode: string
+  name: string | null
+  friends: InflowRefFriend[]
+}

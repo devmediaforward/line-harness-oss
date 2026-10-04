@@ -29,6 +29,7 @@ import { registerManageTrafficPools } from "./manage-traffic-pools.js";
 import { registerManageMessageTemplates } from "./manage-message-templates.js";
 import { registerListConversations } from "./list-conversations.js";
 import { registerGetConversation } from "./get-conversation.js";
+import { registerGetInflowAnalytics } from "./get-inflow-analytics.js";
 
 export function registerAllTools(server: McpServer, ctx: ToolContext): void {
   registerSendMessage(server, ctx);
@@ -60,4 +61,5 @@ export function registerAllTools(server: McpServer, ctx: ToolContext): void {
   registerManageMessageTemplates(server, ctx);
   registerListConversations(server, ctx);
   registerGetConversation(server, ctx);
+  registerGetInflowAnalytics(server, ctx);
 }
