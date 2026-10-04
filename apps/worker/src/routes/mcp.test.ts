@@ -78,6 +78,7 @@ describe('remote MCP endpoint', () => {
     expect(names).toContain('send_message');
     expect(names).toContain('manage_tags');
     expect(names).toContain('account_summary');
+    expect(names).toContain('get_inflow_analytics');
   });
 
   it('routes tool API calls through app.fetch, never global fetch', async () => {
@@ -208,6 +209,149 @@ describe('remote MCP endpoint', () => {
     const body = (await res.json()) as any;
     expect(body.result.isError).toBeFalsy();
     expect(body.result.content[0].text).toContain('vip');
+  });
+
+  describe('get_inflow_analytics', () => {
+    const ROUTES = [
+      { id: 'er_lp', refCode: 'lp-a', name: 'LP A', isActive: true },
+      { id: 'er_zero', refCode: 'new-campaign', name: 'New Campaign', isActive: false },
+      { id: 'er_slash', refCode: 'a b/c', name: 'Slash Route', isActive: true },
+    ];
+
+    function callInflow(args: Record<string, unknown>) {
+      return post({ jsonrpc: '2.0', id: 40, method: 'tools/call', params: { name: 'get_inflow_analytics', arguments: args } });
+    }
+
+    function makeApp() {
+      const app = new Hono<Env>();
+      const calls = { summary: [] as string[], detail: [] as string[], refParams: [] as string[], funnel: [] as string[], list: 0 };
+      app.get('/api/analytics/ref-summary', (c) => {
+        calls.summary.push(c.req.url);
+        return c.json({
+          success: true,
+          data: {
+            routes: [
+              { refCode: 'lp-a', name: 'LP A', friendCount: 3, clickCount: 5, latestAt: '2026-10-01 10:00:00' },
+              { refCode: 'x-uuid', name: null, friendCount: 7, clickCount: 0, latestAt: '2026-10-02 10:00:00' },
+            ],
+            totalFriends: 15,
+            friendsWithRef: 10,
+            friendsWithoutRef: 5,
+          },
+        });
+      });
+      app.get('/api/analytics/ref/:refCode', (c) => {
+        const refCode = c.req.param('refCode');
+        calls.detail.push(c.req.url);
+        calls.refParams.push(refCode);
+        const registered = ROUTES.find((r) => r.refCode === refCode);
+        const friends = refCode === 'dup'
+          ? [
+              { id: 'f0', displayName: 'F0', trackedAt: '2026-10-03 10:00:00' },
+              { id: 'f0', displayName: 'F0', trackedAt: '2026-10-01 10:00:00' },
+              { id: 'f1', displayName: 'F1', trackedAt: null },
+            ]
+          : Array.from({ length: 4 }, (_, i) => ({ id: `f${i}`, displayName: `F${i}`, trackedAt: null }));
+        return c.json({ success: true, data: { refCode, name: registered?.name ?? null, friends } });
+      });
+      app.get('/api/entry-routes', (c) => {
+        calls.list += 1;
+        return c.json({ success: true, data: ROUTES });
+      });
+      app.get('/api/entry-routes/:id/funnel', (c) => {
+        calls.funnel.push(c.req.param('id'));
+        return c.json({ success: true, data: { click_count: 12, friend_add_count: 4, form_submission_count: 2, cv_count: 1 } });
+      });
+      app.route('/', createMcpRoute((r, e, x) => app.fetch(r, e, x)));
+      return { app, calls };
+    }
+
+    async function run(app: Hono<Env>, args: Record<string, unknown>) {
+      const res = await app.fetch(callInflow(args), makeEnv(), execCtx);
+      const body = await res.json() as any;
+      expect(body.result.isError).toBeFalsy();
+      return JSON.parse(body.result.content[0].text);
+    }
+
+    it('summary merges registered zero-friend routes and unregistered refs', async () => {
+      const { app, calls } = makeApp();
+      const out = await run(app, { accountId: 'acc_1' });
+      expect(out.success).toBe(true);
+      expect(calls.summary).toEqual(['https://w.example.com/api/analytics/ref-summary?lineAccountId=acc_1']);
+      expect(calls.list).toBe(1);
+      expect(calls.funnel).toEqual([]);
+      expect(out.totals).toEqual({ totalFriends: 15, friendsWithRef: 10, friendsWithoutRef: 5 });
+      expect(typeof out.note).toBe('string');
+      expect(out.routes.map((r: any) => r.refCode)).toEqual(['x-uuid', 'lp-a', 'new-campaign', 'a b/c']);
+
+      const unregistered = out.routes.find((r: any) => r.refCode === 'x-uuid');
+      expect(unregistered).toMatchObject({ registered: false, name: null, friendCount: 7 });
+      expect(unregistered).not.toHaveProperty('isActive');
+
+      const zero = out.routes.find((r: any) => r.refCode === 'new-campaign');
+      expect(zero).toEqual({
+        refCode: 'new-campaign',
+        name: 'New Campaign',
+        registered: true,
+        isActive: false,
+        friendCount: 0,
+        clickCount: 0,
+        latestAt: null,
+        inflowUrl: 'https://w.example.com/r/new-campaign',
+      });
+
+      expect(out.routes.find((r: any) => r.refCode === 'lp-a')).toMatchObject({ registered: true, isActive: true, friendCount: 3 });
+      expect(out.routes.find((r: any) => r.refCode === 'a b/c').inflowUrl).toBe('https://w.example.com/r/a%20b%2Fc');
+    });
+
+    it('detail for a registered ref returns camelCase funnel, truncates, and calls funnel once', async () => {
+      const { app, calls } = makeApp();
+      const out = await run(app, { refCode: 'lp-a', limit: 2 });
+      expect(calls.funnel).toEqual(['er_lp']);
+      expect(calls.list).toBe(1);
+      expect(calls.detail).toEqual(['https://w.example.com/api/analytics/ref/lp-a']);
+      expect(out).toMatchObject({
+        success: true,
+        refCode: 'lp-a',
+        name: 'LP A',
+        registered: true,
+        isActive: true,
+        inflowUrl: 'https://w.example.com/r/lp-a',
+        funnel: { clicks: 12, friendAdds: 4, formSubmissions: 2, conversions: 1 },
+        friendCount: 4,
+        truncated: true,
+      });
+      expect(out.friends.map((f: any) => f.id)).toEqual(['f0', 'f1']);
+    });
+
+    it('detail for an unregistered ref returns null funnel without calling the funnel API', async () => {
+      const { app, calls } = makeApp();
+      const out = await run(app, { refCode: 'x-uuid' });
+      expect(calls.funnel).toEqual([]);
+      expect(out).toMatchObject({ registered: false, name: null, funnel: null, friendCount: 4, truncated: false });
+      expect(out).not.toHaveProperty('isActive');
+      expect(out.friends).toHaveLength(4);
+    });
+
+    it('detail counts each friend once even when the API repeats them per click', async () => {
+      const { app } = makeApp();
+      const out = await run(app, { refCode: 'dup' });
+      expect(out.friendCount).toBe(2);
+      expect(out.friends).toEqual([
+        { id: 'f0', displayName: 'F0', trackedAt: '2026-10-03 10:00:00' },
+        { id: 'f1', displayName: 'F1', trackedAt: null },
+      ]);
+      expect(out.truncated).toBe(false);
+    });
+
+    it('encodes refCode so slashes and spaces do not break the detail path', async () => {
+      const { app, calls } = makeApp();
+      const out = await run(app, { refCode: 'a b/c' });
+      expect(calls.detail).toEqual(['https://w.example.com/api/analytics/ref/a%20b%2Fc']);
+      expect(calls.refParams).toEqual(['a b/c']);
+      expect(calls.funnel).toEqual(['er_slash']);
+      expect(out).toMatchObject({ refCode: 'a b/c', registered: true, inflowUrl: 'https://w.example.com/r/a%20b%2Fc' });
+    });
   });
 
   it('405s on GET and DELETE', async () => {
