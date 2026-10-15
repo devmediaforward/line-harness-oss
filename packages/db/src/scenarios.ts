@@ -519,6 +519,81 @@ export async function resetFriendScenarioEnrollment(
   return (result.meta?.changes ?? 0) > 0;
 }
 
+/**
+ * 「resetFriendScenarioEnrollment → 0 件なら enrollFriendInScenario」と同じ結果になる
+ * 準備済みの文を返す（D1 の batch に混ぜて、他の書き込みと同じトランザクションで流すため。実行はしない）。
+ *
+ * - 1 本目: 進行中('active' / 'paused')の登録があれば起点を今にリセットする UPDATE。
+ * - 2 本目: INSERT OR IGNORE。進行中('active' / 'paused' / 'delivering')の行が残っていれば
+ *   部分 UNIQUE 索引 idx_friend_scenarios_unique に弾かれて何も起きない。完了済みしか無い／行が無い
+ *   ときだけ新規登録になる。
+ * - ステップが 0 本のシナリオは「即完了」: 進行中の行を completed にし、行が 1 つも無いときだけ
+ *   completed の行を作る（完了済みの孤児行を増やさない）。
+ *
+ * どの文も `AND ${guard.sql}` を付ける。guard が偽なら、文は何も書き換えない
+ * （同じバッチ内で「最初の 1 回だけ」「新規に付いたときだけ」を判定するために使う）。
+ * guard.sql は友だち・シナリオを参照しない独立した式（EXISTS / NOT EXISTS）にすること。
+ */
+export async function buildScenarioRestartStatements(
+  db: D1Database,
+  friendId: string,
+  scenarioId: string,
+  guard: { sql: string; binds: unknown[] },
+): Promise<D1PreparedStatement[]> {
+  const start = await computeEnrollmentStart(db, scenarioId);
+  if (!start) return [];
+
+  const now = jstNow();
+  const id = crypto.randomUUID();
+
+  if (!start.hasSteps) {
+    return [
+      db
+        .prepare(
+          `UPDATE friend_scenarios
+           SET status = 'completed',
+               next_delivery_at = NULL,
+               updated_at = ?
+           WHERE friend_id = ? AND scenario_id = ? AND status IN ('active', 'paused')
+             AND ${guard.sql}`,
+        )
+        .bind(now, friendId, scenarioId, ...guard.binds),
+      db
+        .prepare(
+          `INSERT OR IGNORE INTO friend_scenarios (id, friend_id, scenario_id, current_step_order, status, started_at, next_delivery_at, updated_at)
+           SELECT ?, ?, ?, 0, 'completed', ?, NULL, ?
+           WHERE NOT EXISTS (SELECT 1 FROM friend_scenarios WHERE friend_id = ? AND scenario_id = ?)
+             AND ${guard.sql}`,
+        )
+        .bind(id, friendId, scenarioId, now, now, friendId, scenarioId, ...guard.binds),
+    ];
+  }
+
+  // current_step_order = -1 は enrollFriendInScenario / resetFriendScenarioEnrollment と同じ理由
+  // （step_order=0 の先頭ステップを拾わせるため）。
+  return [
+    db
+      .prepare(
+        `UPDATE friend_scenarios
+         SET current_step_order = -1,
+             status = 'active',
+             started_at = ?,
+             next_delivery_at = ?,
+             updated_at = ?
+         WHERE friend_id = ? AND scenario_id = ? AND status IN ('active', 'paused')
+           AND ${guard.sql}`,
+      )
+      .bind(now, start.nextDeliveryAt, now, friendId, scenarioId, ...guard.binds),
+    db
+      .prepare(
+        `INSERT OR IGNORE INTO friend_scenarios (id, friend_id, scenario_id, current_step_order, status, started_at, next_delivery_at, updated_at)
+         SELECT ?, ?, ?, -1, 'active', ?, ?, ?
+         WHERE ${guard.sql}`,
+      )
+      .bind(id, friendId, scenarioId, now, start.nextDeliveryAt, now, ...guard.binds),
+  ];
+}
+
 export async function getFriendScenariosDueForDelivery(
   db: D1Database,
   now: string,

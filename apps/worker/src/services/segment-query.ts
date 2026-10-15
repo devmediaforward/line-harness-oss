@@ -93,7 +93,12 @@ export function buildSegmentQuery(condition: SegmentCondition): { sql: string; b
 
   const separator = condition.operator === 'AND' ? ' AND ' : ' OR '
   const where = clauses.length > 0 ? clauses.join(separator) : '1=1'
-  const sql = `SELECT f.id, f.line_user_id FROM friends f WHERE ${where}`
+  // is_following のルールが無いときは、友だちでない記録(外部システムの同期で作る行・ブロック中の行)に
+  // 配信しないよう、既定で is_following = 1 に絞る。ルールがあるときは、その指定をそのまま尊重する。
+  // OR の優先順位が変わらないよう、ルート側で WHERE の直後に条件を足されても崩れないよう括弧で包む。
+  const hasFollowingRule = condition.rules.some((rule) => rule.type === 'is_following')
+  const followingGuard = hasFollowingRule ? '' : ' AND f.is_following = 1'
+  const sql = `SELECT f.id, f.line_user_id FROM friends f WHERE (${where})${followingGuard}`
 
   return { sql, bindings }
 }

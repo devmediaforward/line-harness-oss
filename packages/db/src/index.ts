@@ -34,6 +34,7 @@ export * from './affiliate-offers';
 export * from './affiliate-attribution';
 export * from './affiliate-report';
 export * from './account-settings';
+export * from './friend-sync';
 
 /**
  * Thin wrapper around D1Database.
