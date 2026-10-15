@@ -30,6 +30,7 @@ import { rateLimitMiddleware } from './middleware/rate-limit.js';
 import { createMcpRoute } from './routes/mcp.js';
 import { webhook } from './routes/webhook.js';
 import { friends } from './routes/friends.js';
+import { friendSync } from './routes/friend-sync.js';
 import { tags } from './routes/tags.js';
 import { scenarios } from './routes/scenarios.js';
 import { broadcasts } from './routes/broadcasts.js';
@@ -176,6 +177,7 @@ app.use('*', authMiddleware);
 // Mount route groups — MVP & Round 2
 app.route('/', webhook);
 app.route('/', friends);
+app.route('/', friendSync);
 app.route('/', tags);
 app.route('/', scenarios);
 app.route('/', broadcasts);

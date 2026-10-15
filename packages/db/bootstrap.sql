@@ -464,6 +464,15 @@ CREATE TABLE friend_scores (
   created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%f', 'now', '+9 hours'))
 );
 
+CREATE TABLE friend_sync_reattach (
+  friend_id    TEXT NOT NULL REFERENCES friends (id) ON DELETE CASCADE,
+  tag_id       TEXT NOT NULL REFERENCES tags (id) ON DELETE CASCADE,
+  reattach_key TEXT NOT NULL,
+  claim_id     TEXT NOT NULL,
+  created_at   TEXT NOT NULL,
+  PRIMARY KEY (friend_id, tag_id, reattach_key)
+);
+
 CREATE TABLE friend_tags (
   friend_id   TEXT NOT NULL REFERENCES friends (id) ON DELETE CASCADE,
   tag_id      TEXT NOT NULL REFERENCES tags (id) ON DELETE CASCADE,

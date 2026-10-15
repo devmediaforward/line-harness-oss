@@ -57,7 +57,8 @@
     "048_chats_friend_unique.sql",
     "049_tracked_links_short_code.sql",
     "050_diagnoses.sql",
-    "051_diagnosis_request_id.sql"
+    "051_diagnosis_request_id.sql",
+    "052_friend_sync_reattach.sql"
   ],
-  "migrationCount": 58
+  "migrationCount": 59
 }

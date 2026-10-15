@@ -216,6 +216,52 @@ const spec = {
         responses: { '200': { description: 'Tag removed' } },
       },
     },
+    '/api/friend-sync/{lineUserId}': {
+      put: {
+        tags: ['Friends'],
+        summary: '友だちの今の状態を同期（外部システム用。記録が無ければ作る。何度送っても同じ結果）',
+        description: 'metadata は最上位のキーごとに上書き（null でそのキーを削除）。tags はタグ名 → 付いているべきか（存在しない名前があれば 422）。reattach は同じ (友だち, タグ, key) では 1 回だけタグを外して付け直し、そのタグを起点とするシナリオを始め直す。',
+        parameters: [{ name: 'lineUserId', in: 'path', required: true, schema: { type: 'string', pattern: '^U[0-9a-f]{32}$' } }],
+        requestBody: {
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  metadata: { type: 'object', additionalProperties: true },
+                  tags: { type: 'object', additionalProperties: { type: 'boolean' } },
+                  reattach: { type: 'object', properties: { tag: { type: 'string' }, key: { type: 'string' } }, required: ['tag', 'key'] },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          '200': {
+            description: 'Synced',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    friendId: { type: 'string' },
+                    created: { type: 'boolean' },
+                    isFollowing: { type: 'boolean' },
+                    tagsAdded: { type: 'array', items: { type: 'string' } },
+                    tagsRemoved: { type: 'array', items: { type: 'string' } },
+                    reattached: { type: 'boolean' },
+                  },
+                },
+              },
+            },
+          },
+          '400': { description: 'Invalid lineUserId or body' },
+          '401': { description: 'Unauthorized' },
+          '422': { description: 'Tag not found (missingTags)' },
+          '503': { description: 'LINE profile API temporarily unavailable (retry)' },
+        },
+      },
+    },
     // ── Tags ────────────────────────────────────────────────────────────────
     '/api/tags': {
       get: { tags: ['Tags'], summary: 'タグ一覧取得', responses: { '200': { description: 'All tags' } } },
