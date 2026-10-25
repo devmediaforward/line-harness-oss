@@ -56,3 +56,22 @@ jobs:
           npx wrangler pages deploy apps/web/out \
             --project-name="$PAGES_PROJECT_NAME" \
             --commit-message="deploy ${GITHUB_SHA}"
+
+      # 任意: 同じ静的書き出しを「スクリプト無しの静的アセット専用 Worker」としても公開する。
+      # 管理画面を Worker API と同じサイト(*.<account>.workers.dev)に置くため
+      # (pages.dev ↔ workers.dev は別サイトで、Safari 等ではクッキーが届かない)。
+      # 環境の変数 ADMIN_WORKER_NAME が設定されているときだけ動く。未設定(production 等)なら
+      # このステップは丸ごと飛ばされ、動きは今までと同じ。
+      - name: Deploy admin as Workers static assets
+        if: vars.ADMIN_WORKER_NAME != ''
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          ADMIN_WORKER_NAME: ${{ vars.ADMIN_WORKER_NAME }}
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          npx wrangler deploy \
+            --config apps/web/wrangler.admin.jsonc \
+            --name "$ADMIN_WORKER_NAME" \
+            --message "deploy ${GITHUB_SHA}"

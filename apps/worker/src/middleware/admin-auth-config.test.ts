@@ -193,3 +193,54 @@ describe('resolveCorsOrigin — local development', () => {
     ).toBe('');
   });
 });
+
+describe('admin as Workers static assets on the same workers.dev account (same-site)', () => {
+  // 管理画面を `*.<account>.workers.dev` の静的アセット Worker としても公開する構成。
+  // Worker API と PSL(workers.dev)の1つ下 `<account>.workers.dev` を共有 = 同一サイト。
+  const ADMIN_WORKERS = 'https://your-admin.your-subdomain.workers.dev';
+  const requestUrl = `${WORKERS}/api/auth/session`;
+
+  test('is same-site with the Worker API, but still cross-origin', () => {
+    expect(isCrossSite(ADMIN_WORKERS, WORKERS)).toBe(false);
+  });
+
+  test('a workers.dev admin of another account stays cross-site', () => {
+    expect(isCrossSite('https://your-admin.other-subdomain.workers.dev', WORKERS)).toBe(true);
+  });
+
+  test('only the same-site admin origin: not cross-site, Lax works, no misconfiguration', () => {
+    const cfg = resolveAdminAuthConfig({ ADMIN_ORIGIN: ADMIN_WORKERS, WORKER_URL: WORKERS });
+    expect(cfg.crossSite).toBe(false);
+    expect(cfg.sameSite).toBe('Lax');
+    expect(cfg.misconfigured).toBeNull();
+  });
+
+  test('allowlist with pages.dev + workers.dev (CI default ADMIN_ALLOW_CROSS_SITE=true): SameSite=None, valid', () => {
+    const cfg = resolveAdminAuthConfig({
+      ADMIN_ORIGIN: `${PAGES},${ADMIN_WORKERS}`,
+      WORKER_URL: WORKERS,
+      ADMIN_ALLOW_CROSS_SITE: 'true',
+    });
+    expect(cfg.crossSite).toBe(true);
+    expect(cfg.sameSite).toBe('None');
+    expect(cfg.misconfigured).toBeNull();
+  });
+
+  test('CORS echoes the workers.dev admin origin only when it is on the allowlist', () => {
+    const allowed: AdminAuthEnv = {
+      ADMIN_ORIGIN: `${PAGES},${ADMIN_WORKERS}`,
+      WORKER_URL: WORKERS,
+      ADMIN_ALLOW_CROSS_SITE: 'true',
+    };
+    expect(resolveCorsOrigin(allowed, ADMIN_WORKERS, requestUrl)).toBe(ADMIN_WORKERS);
+    const pagesOnly: AdminAuthEnv = { ...allowed, ADMIN_ORIGIN: PAGES };
+    expect(resolveCorsOrigin(pagesOnly, ADMIN_WORKERS, requestUrl)).toBe('');
+  });
+
+  test('another workers.dev host is not allowed just because it shares the suffix', () => {
+    const env: AdminAuthEnv = { ADMIN_ORIGIN: ADMIN_WORKERS, WORKER_URL: WORKERS };
+    expect(
+      resolveCorsOrigin(env, 'https://evil.your-subdomain.workers.dev', requestUrl),
+    ).toBe('');
+  });
+});

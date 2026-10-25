@@ -85,7 +85,8 @@ jobs:
           WORKER_URL: ${{ vars.WORKER_URL }}
           # Optional per-environment R2 bucket. Set as an Environment Variable when
           # you want dev/prod to use separate buckets (e.g. line-harness-images-dev
-          # vs line-harness-images). Unset = keep the wrangler.toml default (shared).
+          # vs line-harness-images). Unset = keep the wrangler.toml default (shared) —
+          # production only; a development deploy without it is refused below.
           R2_BUCKET_NAME: ${{ vars.R2_BUCKET_NAME }}
           # Remote MCP OAuth (POST /mcp, see docs/REMOTE-MCP.md). Public values.
           # Unset = the feature stays off (/mcp returns 404) and deploy proceeds.
@@ -111,11 +112,26 @@ jobs:
           jq --arg e "$DEPLOY_ENVIRONMENT" '.vars.DEPLOY_ENVIRONMENT = $e' \
             dist/line_harness/wrangler.json > "$tmp" && mv "$tmp" dist/line_harness/wrangler.json
           # Swap the R2 bucket name only when R2_BUCKET_NAME is set (dev/prod split).
+          # Use jq (not sed): the jq steps above re-format the JSON with spaces, so a
+          # sed pattern on `"bucket_name":"..."` silently stops matching (this left
+          # Dev bound to the production bucket from 2026-09-28). Then verify the
+          # result and fail the deploy if the binding is not what we asked for.
+          # Dev must never fall back to the template default (the production bucket).
+          if [ "$DEPLOY_ENVIRONMENT" = "development" ] && [ -z "$R2_BUCKET_NAME" ]; then
+            echo "R2_BUCKET_NAME is not set for development; refusing to deploy with the default bucket"
+            exit 1
+          fi
           if [ -n "$R2_BUCKET_NAME" ]; then
-            sed -i \
-              -e "s|\"bucket_name\":\"[^\"]*\"|\"bucket_name\":\"${R2_BUCKET_NAME}\"|g" \
-              dist/line_harness/wrangler.json
-            echo "Patched R2 bucket_name: $R2_BUCKET_NAME"
+            tmp="$(mktemp)"
+            jq --arg b "$R2_BUCKET_NAME" \
+              '.r2_buckets |= map(if .binding == "IMAGES" then .bucket_name = $b else . end)' \
+              dist/line_harness/wrangler.json > "$tmp" && mv "$tmp" dist/line_harness/wrangler.json
+            actual_bucket="$(jq -r '(.r2_buckets // [])[] | select(.binding == "IMAGES") | .bucket_name' dist/line_harness/wrangler.json)"
+            if [ "$actual_bucket" != "$R2_BUCKET_NAME" ]; then
+              echo "R2 bucket_name patch failed: expected $R2_BUCKET_NAME, got $actual_bucket"
+              exit 1
+            fi
+            echo "Patched R2 bucket_name: $actual_bucket"
           fi
           # Inject admin CORS vars into the deployed config when ADMIN_ORIGIN is
           # set. ADMIN_ALLOW_CROSS_SITE defaults to "true" (SameSite=None; Secure
