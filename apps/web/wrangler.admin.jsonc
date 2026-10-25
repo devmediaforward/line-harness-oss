@@ -1,0 +1,27 @@
+// 管理画面(Next の静的書き出し apps/web/out)を「スクリプト無しの静的アセット専用 Worker」
+// として公開するための設定。Pages への公開とは別に、`*.workers.dev` 側にも出す用途。
+// 目的: Worker API(`*.<account>.workers.dev`)と管理画面を同じサイト(PSL の
+// workers.dev の1つ下 = `<account>.workers.dev`)に置き、Safari 等のサードパーティ
+// Cookie 遮断下でも session クッキーがファーストパーティとして扱われるようにする。
+//
+// 使い方(CI: .github/workflows/deploy-cloudflare-admin.yml が ADMIN_WORKER_NAME の
+// 設定されているときだけ実行する):
+//   npx wrangler deploy --config apps/web/wrangler.admin.jsonc --name "$ADMIN_WORKER_NAME"
+// `name` は --name で必ず上書きする(下の値はプレースホルダ)。account_id は
+// CLOUDFLARE_ACCOUNT_ID 環境変数から取る。`main` を持たない = Worker スクリプト無し。
+{
+  "name": "your-admin-worker-name",
+  "compatibility_date": "2025-01-01",
+  // `<name>.<account>.workers.dev` だけで公開する。ハッシュ付きのプレビュー URL は作らない
+  // (API の CORS 許可リストに無く、ログインできない公開面が増えるだけのため)。
+  "workers_dev": true,
+  "preview_urls": false,
+  "assets": {
+    "directory": "./out",
+    // 既定値。`/friends` → friends.html、`/events/new` → events/new.html、`/` → index.html。
+    // Next の `output: 'export'`(trailingSlash 無し)の出力に合う。
+    "html_handling": "auto-trailing-slash",
+    // 存在しないパスは out/404.html を 404 で返す(Pages と同じ挙動)。
+    "not_found_handling": "404-page"
+  }
+}
